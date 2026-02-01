@@ -69,7 +69,12 @@ cd /path/to/ignite
 
 # 既存セッションを強制終了して再起動
 ./scripts/ignite start -f
+
+# セッションIDとワークスペースを指定して起動
+./scripts/ignite start -s my-session -w /path/to/workspace
 ```
+
+`-s`/`--session` と `-w`/`--workspace` オプションを使用することで、複数のプロジェクトを並行して実行できます。詳細は「複数プロジェクトの並行実行」セクションを参照してください。
 
 ### 2. タスクを投入
 
@@ -95,10 +100,13 @@ cd /path/to/ignite
 #### ダッシュボードで確認
 
 ```bash
-# リアルタイム監視
-watch -n 5 cat workspace/dashboard.md
+# ステータスコマンドで確認（推奨）
+./scripts/ignite status
 
-# または1回だけ表示
+# リアルタイム監視（ワークスペースがカスタムの場合はパスを調整）
+watch -n 5 ./scripts/ignite status
+
+# または直接ダッシュボードファイルを表示
 cat workspace/dashboard.md
 ```
 
@@ -335,9 +343,42 @@ ignite/
 | `attach` | tmuxセッションに接続 | `./scripts/ignite attach` |
 | `logs` | ログ表示 | `./scripts/ignite logs` |
 | `clean` | workspaceクリア | `./scripts/ignite clean` |
+| `list` | セッション一覧表示 | `./scripts/ignite list` |
 | `help` | ヘルプ表示 | `./scripts/ignite help` |
 
 詳細なヘルプは `./scripts/ignite help <command>` で確認できます。
+
+### 複数プロジェクトの並行実行
+
+セッションIDとワークスペースを指定することで、複数のプロジェクトを同時に実行できます。
+
+```bash
+# プロジェクトAを起動
+./scripts/ignite start -s proj-a -w /tmp/workspace-a
+
+# プロジェクトBを別セッションで起動
+./scripts/ignite start -s proj-b -w /tmp/workspace-b
+
+# セッション一覧を確認
+./scripts/ignite list
+
+# 各プロジェクトにタスクを投入
+./scripts/ignite plan "機能A" -s proj-a -w /tmp/workspace-a
+./scripts/ignite plan "機能B" -s proj-b -w /tmp/workspace-b
+
+# 各プロジェクトの状態確認
+./scripts/ignite status -s proj-a -w /tmp/workspace-a
+./scripts/ignite status -s proj-b -w /tmp/workspace-b
+
+# 各プロジェクトに接続
+./scripts/ignite attach -s proj-a
+./scripts/ignite attach -s proj-b
+```
+
+**注意事項:**
+- 各セッションは独立したワークスペースを持つ必要があります
+- セッションIDを指定しない場合、デフォルトの `ignite-session` が使用されます
+- ワークスペースを指定しない場合、デフォルトの `workspace/` ディレクトリが使用されます
 
 ### タスクの種類別の使用例
 
@@ -415,7 +456,10 @@ ignitians:
 **基本操作:**
 
 ```bash
-# セッションにアタッチ
+# セッションにアタッチ（推奨）
+./scripts/ignite attach
+
+# または直接tmuxコマンドを使用（セッション名は起動時に指定した名前）
 tmux attach -t ignite-session
 
 # デタッチ（セッション内で）
@@ -675,8 +719,8 @@ status: pending              # 状態（pending/processing/completed）
 # ステータスを確認
 ./scripts/ignite status
 
-# ダッシュボードを5秒ごとに監視
-watch -n 5 cat workspace/dashboard.md
+# 5秒ごとにステータスを監視
+watch -n 5 ./scripts/ignite status
 
 # ログをリアルタイム監視
 ./scripts/ignite logs -f

@@ -20,6 +20,10 @@ SUB_LEADER_NAMES=("義賀リオ" "祢音ナナ" "衣結ノア" "通瀬アイナ"
 # デフォルト設定
 DEFAULT_WORKER_COUNT=8
 
+# Claude セッションデータのパス（PROJECT_ROOT から動的に生成）
+# Claude Code は /path/to/project を -path-to-project に変換してディレクトリ名にする
+CLAUDE_PROJECTS_DIR="$HOME/.claude/projects/$(echo "$PROJECT_ROOT" | sed 's|/|-|g')"
+
 # カラー定義
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -451,6 +455,71 @@ ignitians:
   ids: [$(seq -s ', ' 1 ${actual_ignitian_count} 2>/dev/null || echo "")]
 EOF
 
+    # コスト追跡用のセッションID記録
+    print_info "コスト追跡用のセッション情報を記録中..."
+    mkdir -p "$WORKSPACE_DIR/costs/history"
+
+    local started_timestamp=$(date -Iseconds)
+    cat > "$WORKSPACE_DIR/costs/sessions.yaml" <<EOF
+# IGNITE セッション情報（コスト追跡用）
+# このファイルはシステム起動時に自動的に生成されます
+
+session_name: "${SESSION_NAME}"
+started_at: "${started_timestamp}"
+workspace_dir: "${WORKSPACE_DIR}"
+
+# 各エージェントのClaudeセッションIDは起動後に自動記録されます
+# sessions-index.json から起動時刻でマッチングして特定
+
+agents:
+EOF
+
+    # エージェントのセッションID記録（起動時刻ベースで推定）
+    # Note: 実際のセッションIDは sessions-index.json から起動時刻でマッチング
+    local agent_started_at="$started_timestamp"
+
+    # Leader
+    cat >> "$WORKSPACE_DIR/costs/sessions.yaml" <<EOF
+  leader:
+    pane: 0
+    name: "伊羽ユイ"
+    started_at: "${agent_started_at}"
+    session_id: null
+EOF
+
+    # Sub-Leaders
+    if [[ "$agent_mode" != "leader" ]]; then
+        for i in "${!SUB_LEADERS[@]}"; do
+            local role="${SUB_LEADERS[$i]}"
+            local name="${SUB_LEADER_NAMES[$i]}"
+            local pane=$((i + 1))
+            cat >> "$WORKSPACE_DIR/costs/sessions.yaml" <<EOF
+  ${role}:
+    pane: ${pane}
+    name: "${name}"
+    started_at: "${agent_started_at}"
+    session_id: null
+EOF
+        done
+    fi
+
+    # IGNITIANs
+    if [[ "$actual_ignitian_count" -gt 0 ]]; then
+        echo "" >> "$WORKSPACE_DIR/costs/sessions.yaml"
+        echo "ignitians:" >> "$WORKSPACE_DIR/costs/sessions.yaml"
+        for ((i=1; i<=actual_ignitian_count; i++)); do
+            local pane=$((6 + i - 1))
+            cat >> "$WORKSPACE_DIR/costs/sessions.yaml" <<EOF
+  ignitian_${i}:
+    pane: ${pane}
+    started_at: "${agent_started_at}"
+    session_id: null
+EOF
+        done
+    fi
+
+    print_success "セッション情報を記録しました"
+
     echo ""
     print_header "起動完了"
     echo ""
@@ -672,11 +741,154 @@ cmd_stop() {
         fi
     fi
 
+    # ワークスペースを設定
+    setup_workspace
+
+    # コスト履歴を保存
+    save_cost_history
+
     # セッション終了
     print_warning "tmuxセッションを終了中..."
     tmux kill-session -t "$SESSION_NAME"
 
     print_success "IGNITE システムを停止しました"
+}
+
+# コスト履歴を保存する関数
+save_cost_history() {
+    local sessions_file="$WORKSPACE_DIR/costs/sessions.yaml"
+
+    if [[ ! -f "$sessions_file" ]]; then
+        print_warning "セッション情報が見つかりません。コスト履歴はスキップします。"
+        return
+    fi
+
+    print_info "コスト履歴を保存中..."
+
+    # 料金設定を読み込む
+    load_pricing || return
+
+    local session_name=$(grep "^session_name:" "$sessions_file" | awk '{print $2}' | tr -d '"')
+    local started_at=$(grep "^started_at:" "$sessions_file" | awk '{print $2}' | tr -d '"')
+    local stopped_at=$(date -Iseconds)
+    local date_suffix=$(date +%Y-%m-%d)
+
+    local history_file="$WORKSPACE_DIR/costs/history/${session_name}_${date_suffix}.yaml"
+    mkdir -p "$WORKSPACE_DIR/costs/history"
+
+    # エージェント定義
+    local -a agents=("leader" "strategist" "architect" "evaluator" "coordinator" "innovator")
+
+    # 履歴ファイルの作成開始
+    cat > "$history_file" <<EOF
+# IGNITE コスト履歴
+# 自動生成: $(date -Iseconds)
+
+session_name: "${session_name}"
+started_at: "${started_at}"
+stopped_at: "${stopped_at}"
+
+agents:
+EOF
+
+    local total_input=0
+    local total_output=0
+    local total_cost=0
+
+    # 各エージェントのコストを記録
+    for role in "${agents[@]}"; do
+        local session_id=$(get_agent_session_id "$role")
+        if [[ -n "$session_id" ]] && [[ "$session_id" != "null" ]]; then
+            local tokens=$(collect_session_tokens "$session_id")
+            local input=$(echo "$tokens" | jq -r '.input')
+            local output=$(echo "$tokens" | jq -r '.output')
+            local cache_read=$(echo "$tokens" | jq -r '.cache_read')
+            local cache_creation=$(echo "$tokens" | jq -r '.cache_creation')
+            local cost=$(calculate_cost "$input" "$output" "$cache_read" "$cache_creation")
+
+            cat >> "$history_file" <<EOF
+  ${role}:
+    session_id: "${session_id}"
+    input_tokens: ${input}
+    output_tokens: ${output}
+    cache_read_tokens: ${cache_read}
+    cache_creation_tokens: ${cache_creation}
+    cost_usd: ${cost}
+EOF
+
+            total_input=$((total_input + input))
+            total_output=$((total_output + output))
+            total_cost=$(echo "$total_cost + $cost" | bc)
+        fi
+    done
+
+    # IGNITIANsのコストを記録
+    local ignitian_total_input=0
+    local ignitian_total_output=0
+    local ignitian_total_cost=0
+    local ignitian_count=0
+
+    echo "" >> "$history_file"
+    echo "ignitians:" >> "$history_file"
+
+    local in_ignitians=false
+    local current_ignitian=""
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^[[:space:]]*ignitians: ]]; then
+            in_ignitians=true
+            continue
+        fi
+        if [[ "$in_ignitians" == true ]]; then
+            if [[ "$line" =~ ^[[:space:]]*ignitian_([0-9]+): ]]; then
+                current_ignitian="ignitian_${BASH_REMATCH[1]}"
+                ignitian_count=$((ignitian_count + 1))
+            elif [[ "$line" =~ ^[[:space:]]*session_id:[[:space:]]*\"?([^\"]+)\"? ]] && [[ -n "$current_ignitian" ]]; then
+                local session_id="${BASH_REMATCH[1]}"
+                if [[ -n "$session_id" ]] && [[ "$session_id" != "null" ]]; then
+                    local tokens=$(collect_session_tokens "$session_id")
+                    local input=$(echo "$tokens" | jq -r '.input')
+                    local output=$(echo "$tokens" | jq -r '.output')
+                    local cache_read=$(echo "$tokens" | jq -r '.cache_read')
+                    local cache_creation=$(echo "$tokens" | jq -r '.cache_creation')
+                    local cost=$(calculate_cost "$input" "$output" "$cache_read" "$cache_creation")
+
+                    cat >> "$history_file" <<EOF
+  ${current_ignitian}:
+    session_id: "${session_id}"
+    input_tokens: ${input}
+    output_tokens: ${output}
+    cache_read_tokens: ${cache_read}
+    cache_creation_tokens: ${cache_creation}
+    cost_usd: ${cost}
+EOF
+
+                    ignitian_total_input=$((ignitian_total_input + input))
+                    ignitian_total_output=$((ignitian_total_output + output))
+                    ignitian_total_cost=$(echo "$ignitian_total_cost + $cost" | bc)
+                fi
+                current_ignitian=""
+            elif [[ "$line" =~ ^[a-z]+: ]]; then
+                # インデントなしの新しいセクションが始まったら終了
+                in_ignitians=false
+            fi
+        fi
+    done < "$sessions_file"
+
+    # 全体の合計
+    total_input=$((total_input + ignitian_total_input))
+    total_output=$((total_output + ignitian_total_output))
+    total_cost=$(echo "$total_cost + $ignitian_total_cost" | bc)
+
+    cat >> "$history_file" <<EOF
+
+total:
+  input_tokens: ${total_input}
+  output_tokens: ${total_output}
+  cost_usd: ${total_cost}
+  ignitians_count: ${ignitian_count}
+EOF
+
+    print_success "コスト履歴を保存しました: $history_file"
 }
 
 # =============================================================================
@@ -1084,9 +1296,12 @@ cmd_clean() {
         echo "  - $WORKSPACE_DIR/context/*"
         echo "  - $WORKSPACE_DIR/state/*"
         echo "  - $WORKSPACE_DIR/archive/*"
+        echo "  - $WORKSPACE_DIR/costs/sessions.yaml"
         echo "  - $WORKSPACE_DIR/dashboard.md"
         echo "  - $WORKSPACE_DIR/system_config.yaml"
         echo "  - $WORKSPACE_DIR/coordinator_state.yaml"
+        echo ""
+        echo -e "${YELLOW}注意: costs/history/ はクリアされません（履歴保持）${NC}"
         echo ""
         read -p "続行しますか? (y/N): " -n 1 -r
         echo
@@ -1112,7 +1327,487 @@ cmd_clean() {
     rm -rf "$WORKSPACE_DIR/archive"/*
     mkdir -p "$WORKSPACE_DIR/archive"/{leader,strategist,coordinator}
 
+    # コストのセッション情報をクリア（履歴は保持）
+    rm -f "$WORKSPACE_DIR/costs/sessions.yaml"
+
     print_success "workspaceをクリアしました"
+}
+
+# =============================================================================
+# cost コマンド - トークン消費量と費用を表示
+# =============================================================================
+
+# 料金設定を読み込む
+load_pricing() {
+    local pricing_file="$PROJECT_ROOT/config/pricing.yaml"
+    if [[ ! -f "$pricing_file" ]]; then
+        print_error "料金設定ファイルが見つかりません: $pricing_file"
+        return 1
+    fi
+
+    # デフォルトモデルの料金を取得
+    PRICE_INPUT=$(grep -A5 "claude-opus-4-5-20251101:" "$pricing_file" | grep "input_per_1m_tokens:" | awk '{print $2}')
+    PRICE_OUTPUT=$(grep -A5 "claude-opus-4-5-20251101:" "$pricing_file" | grep "output_per_1m_tokens:" | awk '{print $2}')
+    PRICE_CACHE_READ=$(grep -A5 "claude-opus-4-5-20251101:" "$pricing_file" | grep "cache_read_per_1m_tokens:" | awk '{print $2}')
+    PRICE_CACHE_CREATE=$(grep -A5 "claude-opus-4-5-20251101:" "$pricing_file" | grep "cache_creation_per_1m_tokens:" | awk '{print $2}')
+    EXCHANGE_RATE=$(grep "exchange_rate_jpy:" "$pricing_file" | awk '{print $2}')
+
+    # デフォルト値
+    PRICE_INPUT=${PRICE_INPUT:-15.00}
+    PRICE_OUTPUT=${PRICE_OUTPUT:-75.00}
+    PRICE_CACHE_READ=${PRICE_CACHE_READ:-1.50}
+    PRICE_CACHE_CREATE=${PRICE_CACHE_CREATE:-18.75}
+    EXCHANGE_RATE=${EXCHANGE_RATE:-150.0}
+}
+
+# セッションIDからトークン使用量を集計
+collect_session_tokens() {
+    local session_id="$1"
+    local session_file="$CLAUDE_PROJECTS_DIR/${session_id}.jsonl"
+    local session_dir="$CLAUDE_PROJECTS_DIR/${session_id}"
+
+    # 集計対象ファイル
+    local files=()
+    if [[ -f "$session_file" ]]; then
+        files+=("$session_file")
+    fi
+    # サブエージェントのファイルも含める
+    if [[ -d "$session_dir/subagents" ]]; then
+        while IFS= read -r -d '' f; do
+            files+=("$f")
+        done < <(find "$session_dir/subagents" -name "*.jsonl" -print0 2>/dev/null)
+    fi
+
+    if [[ ${#files[@]} -eq 0 ]]; then
+        echo '{"input":0,"output":0,"cache_read":0,"cache_creation":0}'
+        return
+    fi
+
+    # jqで集計
+    cat "${files[@]}" 2>/dev/null | jq -s '
+      [.[] | select(.type == "assistant" and .message.usage != null) | .message.usage]
+      | {
+          input: (map(.input_tokens // 0) | add // 0),
+          output: (map(.output_tokens // 0) | add // 0),
+          cache_read: (map(.cache_read_input_tokens // 0) | add // 0),
+          cache_creation: (map(.cache_creation_input_tokens // 0) | add // 0)
+        }
+    '
+}
+
+# トークン数を人間が読みやすい形式に変換
+format_tokens() {
+    local tokens="$1"
+    if [[ "$tokens" -ge 1000000 ]]; then
+        printf "%.1fM" "$(echo "scale=1; $tokens / 1000000" | bc)"
+    elif [[ "$tokens" -ge 1000 ]]; then
+        printf "%.1fK" "$(echo "scale=1; $tokens / 1000" | bc)"
+    else
+        echo "$tokens"
+    fi
+}
+
+# トークン数をカンマ区切りでフォーマット
+format_number() {
+    local num="$1"
+    printf "%'d" "$num" 2>/dev/null || echo "$num"
+}
+
+# コストを計算（ドル）
+calculate_cost() {
+    local input="$1"
+    local output="$2"
+    local cache_read="$3"
+    local cache_creation="$4"
+
+    # 百万トークンあたりの価格で計算
+    echo "scale=4; ($input * $PRICE_INPUT / 1000000) + ($output * $PRICE_OUTPUT / 1000000) + ($cache_read * $PRICE_CACHE_READ / 1000000) + ($cache_creation * $PRICE_CACHE_CREATE / 1000000)" | bc
+}
+
+# sessions-index.json から起動時刻以降のセッションを検索
+find_sessions_after_time() {
+    local after_time="$1"  # ISO 8601 形式
+    local sessions_index="$CLAUDE_PROJECTS_DIR/sessions-index.json"
+
+    if [[ ! -f "$sessions_index" ]]; then
+        return 1
+    fi
+
+    jq -r --arg after "$after_time" '
+      .entries[]
+      | select(.created >= $after)
+      | .sessionId
+    ' "$sessions_index"
+}
+
+# エージェント名からセッションIDを取得
+get_agent_session_id() {
+    local agent_role="$1"
+    local sessions_file="$WORKSPACE_DIR/costs/sessions.yaml"
+
+    if [[ ! -f "$sessions_file" ]]; then
+        return 1
+    fi
+
+    # session_id は role: の後 4行以内にある
+    grep -A5 "^  ${agent_role}:" "$sessions_file" 2>/dev/null | grep "session_id:" | head -1 | awk '{print $2}' | tr -d '"'
+}
+
+# コスト一覧を表示（セッション履歴）
+list_cost_sessions() {
+    local history_dir="$WORKSPACE_DIR/costs/history"
+
+    print_header "コスト履歴一覧"
+    echo ""
+
+    if [[ ! -d "$history_dir" ]] || [[ -z "$(ls -A "$history_dir" 2>/dev/null)" ]]; then
+        print_warning "履歴がありません"
+        echo ""
+        echo "現在のセッションのコストを確認するには:"
+        echo -e "  ${YELLOW}./scripts/ignite cost${NC}"
+        return
+    fi
+
+    echo "セッション名              開始日時              合計費用"
+    echo "────────────────────────────────────────────────────────"
+
+    for file in "$history_dir"/*.yaml; do
+        if [[ -f "$file" ]]; then
+            local name=$(grep "^session_name:" "$file" | awk '{print $2}' | tr -d '"')
+            local started=$(grep "^started_at:" "$file" | awk '{print $2}' | tr -d '"' | cut -d'T' -f1,2 | tr 'T' ' ')
+            local cost=$(grep -A3 "^total:" "$file" | grep "cost_usd:" | awk '{print $2}')
+            printf "%-24s %-20s \$%.2f\n" "$name" "$started" "$cost"
+        fi
+    done
+
+    echo ""
+    echo "詳細を表示:"
+    echo -e "  ${YELLOW}./scripts/ignite cost -s <session-name>${NC}"
+}
+
+cmd_cost() {
+    local target_session=""
+    local target_agent=""
+    local detailed=false
+    local json_output=false
+    local list_mode=false
+
+    # オプション解析
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -s|--session)
+                target_session="$2"
+                if [[ ! "$target_session" =~ ^ignite- ]]; then
+                    target_session="ignite-$target_session"
+                fi
+                shift 2
+                ;;
+            -a|--agent)
+                target_agent="$2"
+                shift 2
+                ;;
+            -d|--detailed)
+                detailed=true
+                shift
+                ;;
+            -j|--json)
+                json_output=true
+                shift
+                ;;
+            -l|--list)
+                list_mode=true
+                shift
+                ;;
+            -w|--workspace)
+                WORKSPACE_DIR="$2"
+                if [[ ! "$WORKSPACE_DIR" = /* ]]; then
+                    WORKSPACE_DIR="$PROJECT_ROOT/$WORKSPACE_DIR"
+                fi
+                shift 2
+                ;;
+            -h|--help) cmd_help cost; exit 0 ;;
+            *) print_error "Unknown option: $1"; cmd_help cost; exit 1 ;;
+        esac
+    done
+
+    # ワークスペースを設定
+    setup_workspace
+
+    # 一覧モード
+    if [[ "$list_mode" == true ]]; then
+        list_cost_sessions
+        return 0
+    fi
+
+    # 料金設定を読み込む
+    load_pricing || exit 1
+
+    # セッション情報の取得元を決定
+    local sessions_file="$WORKSPACE_DIR/costs/sessions.yaml"
+    local started_at=""
+
+    if [[ -n "$target_session" ]]; then
+        # 履歴から検索
+        local history_file="$WORKSPACE_DIR/costs/history/${target_session}.yaml"
+        if [[ -f "$history_file" ]]; then
+            sessions_file="$history_file"
+            started_at=$(grep "^started_at:" "$history_file" | awk '{print $2}' | tr -d '"')
+        else
+            # 現在のセッションファイルを確認
+            if [[ -f "$sessions_file" ]]; then
+                local current_session=$(grep "^session_name:" "$sessions_file" | awk '{print $2}' | tr -d '"')
+                if [[ "$current_session" != "$target_session" ]]; then
+                    print_error "セッション '$target_session' が見つかりません"
+                    echo ""
+                    echo "利用可能なセッション一覧:"
+                    echo -e "  ${YELLOW}./scripts/ignite cost -l${NC}"
+                    exit 1
+                fi
+            else
+                print_error "セッション情報が見つかりません"
+                exit 1
+            fi
+        fi
+    fi
+
+    if [[ ! -f "$sessions_file" ]]; then
+        print_error "セッション情報が見つかりません: $sessions_file"
+        echo ""
+        echo "IGNITEシステムを起動してください:"
+        echo -e "  ${YELLOW}./scripts/ignite start${NC}"
+        exit 1
+    fi
+
+    # セッション情報を読み取り
+    if [[ -z "$started_at" ]]; then
+        started_at=$(grep "^started_at:" "$sessions_file" | awk '{print $2}' | tr -d '"')
+    fi
+    local session_name=$(grep "^session_name:" "$sessions_file" | awk '{print $2}' | tr -d '"')
+
+    # 経過時間を計算
+    local elapsed=""
+    if [[ -n "$started_at" ]]; then
+        local start_epoch=$(date -d "$started_at" +%s 2>/dev/null || echo "0")
+        local now_epoch=$(date +%s)
+        local diff=$((now_epoch - start_epoch))
+        local hours=$((diff / 3600))
+        local minutes=$(((diff % 3600) / 60))
+        elapsed="${hours}h ${minutes}m"
+    fi
+
+    # エージェント定義
+    local -a agents=("leader" "strategist" "architect" "evaluator" "coordinator" "innovator")
+    local -a agent_names=("伊羽ユイ" "義賀リオ" "祢音ナナ" "衣結ノア" "通瀬アイナ" "恵那ツムギ")
+
+    # 各エージェントのトークン使用量を集計
+    declare -A agent_input
+    declare -A agent_output
+    declare -A agent_cache_read
+    declare -A agent_cache_creation
+    declare -A agent_cost
+
+    local total_input=0
+    local total_output=0
+    local total_cache_read=0
+    local total_cache_creation=0
+    local total_cost=0
+
+    # Sub-Leaders と Leader の集計
+    for i in "${!agents[@]}"; do
+        local role="${agents[$i]}"
+
+        # 特定エージェントのみ表示する場合
+        if [[ -n "$target_agent" ]] && [[ "$target_agent" != "$role" ]] && [[ "$target_agent" != "ignitians" ]]; then
+            continue
+        fi
+
+        local session_id=$(get_agent_session_id "$role")
+        if [[ -n "$session_id" ]]; then
+            local tokens=$(collect_session_tokens "$session_id")
+            local input=$(echo "$tokens" | jq -r '.input')
+            local output=$(echo "$tokens" | jq -r '.output')
+            local cache_read=$(echo "$tokens" | jq -r '.cache_read')
+            local cache_creation=$(echo "$tokens" | jq -r '.cache_creation')
+            local cost=$(calculate_cost "$input" "$output" "$cache_read" "$cache_creation")
+
+            agent_input[$role]=$input
+            agent_output[$role]=$output
+            agent_cache_read[$role]=$cache_read
+            agent_cache_creation[$role]=$cache_creation
+            agent_cost[$role]=$cost
+
+            total_input=$((total_input + input))
+            total_output=$((total_output + output))
+            total_cache_read=$((total_cache_read + cache_read))
+            total_cache_creation=$((total_cache_creation + cache_creation))
+            total_cost=$(echo "$total_cost + $cost" | bc)
+        fi
+    done
+
+    # IGNITIANs の集計
+    local ignitian_input=0
+    local ignitian_output=0
+    local ignitian_cache_read=0
+    local ignitian_cache_creation=0
+    local ignitian_cost=0
+    local ignitian_count=0
+    declare -A ignitian_data
+
+    # ignitians セクションを解析
+    local in_ignitians=false
+    local current_ignitian=""
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^[[:space:]]*ignitians: ]]; then
+            in_ignitians=true
+            continue
+        fi
+        if [[ "$in_ignitians" == true ]]; then
+            if [[ "$line" =~ ^[[:space:]]*ignitian_([0-9]+): ]]; then
+                current_ignitian="ignitian_${BASH_REMATCH[1]}"
+                ignitian_count=$((ignitian_count + 1))
+            elif [[ "$line" =~ ^[[:space:]]*session_id:[[:space:]]*\"?([^\"]+)\"? ]] && [[ -n "$current_ignitian" ]]; then
+                local session_id="${BASH_REMATCH[1]}"
+                if [[ -n "$session_id" ]] && [[ "$session_id" != "null" ]]; then
+                    local tokens=$(collect_session_tokens "$session_id")
+                    local input=$(echo "$tokens" | jq -r '.input')
+                    local output=$(echo "$tokens" | jq -r '.output')
+                    local cache_read=$(echo "$tokens" | jq -r '.cache_read')
+                    local cache_creation=$(echo "$tokens" | jq -r '.cache_creation')
+                    local cost=$(calculate_cost "$input" "$output" "$cache_read" "$cache_creation")
+
+                    ignitian_data[$current_ignitian]="$input:$output:$cache_read:$cache_creation:$cost"
+
+                    ignitian_input=$((ignitian_input + input))
+                    ignitian_output=$((ignitian_output + output))
+                    ignitian_cache_read=$((ignitian_cache_read + cache_read))
+                    ignitian_cache_creation=$((ignitian_cache_creation + cache_creation))
+                    ignitian_cost=$(echo "$ignitian_cost + $cost" | bc)
+                fi
+                current_ignitian=""
+            elif [[ "$line" =~ ^[a-z]+: ]]; then
+                # インデントなしの新しいセクションが始まったら終了
+                in_ignitians=false
+            fi
+        fi
+    done < "$sessions_file"
+
+    # IGNITIANs の合計を全体に追加
+    total_input=$((total_input + ignitian_input))
+    total_output=$((total_output + ignitian_output))
+    total_cache_read=$((total_cache_read + ignitian_cache_read))
+    total_cache_creation=$((total_cache_creation + ignitian_cache_creation))
+    total_cost=$(echo "$total_cost + $ignitian_cost" | bc)
+
+    # JSON出力モード
+    if [[ "$json_output" == true ]]; then
+        local json_agents="{"
+        local first=true
+        for i in "${!agents[@]}"; do
+            local role="${agents[$i]}"
+            if [[ -n "${agent_input[$role]:-}" ]]; then
+                if [[ "$first" == false ]]; then json_agents+=","; fi
+                first=false
+                json_agents+="\"$role\":{\"input\":${agent_input[$role]},\"output\":${agent_output[$role]},\"cache_read\":${agent_cache_read[$role]},\"cache_creation\":${agent_cache_creation[$role]},\"cost\":${agent_cost[$role]}}"
+            fi
+        done
+        json_agents+=",\"ignitians\":{\"count\":$ignitian_count,\"input\":$ignitian_input,\"output\":$ignitian_output,\"cache_read\":$ignitian_cache_read,\"cache_creation\":$ignitian_cache_creation,\"cost\":$ignitian_cost}"
+        json_agents+="}"
+
+        local jpy_cost=$(echo "$total_cost * $EXCHANGE_RATE" | bc)
+        echo "{\"session\":\"$session_name\",\"started_at\":\"$started_at\",\"elapsed\":\"$elapsed\",\"agents\":$json_agents,\"total\":{\"input\":$total_input,\"output\":$total_output,\"cache_read\":$total_cache_read,\"cache_creation\":$total_cache_creation,\"cost\":$total_cost,\"cost_jpy\":$jpy_cost}}"
+        return 0
+    fi
+
+    # テーブル表示
+    print_header "IGNITE コスト概要"
+    echo ""
+
+    if [[ -n "$session_name" ]]; then
+        echo -e "${BLUE}セッション:${NC} $session_name"
+    fi
+    if [[ -n "$started_at" ]]; then
+        local started_display=$(echo "$started_at" | tr 'T' ' ' | cut -d'+' -f1)
+        echo -e "${BLUE}セッション開始:${NC} $started_display"
+    fi
+    if [[ -n "$elapsed" ]]; then
+        echo -e "${BLUE}経過時間:${NC} $elapsed"
+    fi
+    echo ""
+
+    # テーブルヘッダー
+    printf "┌─────────────────┬──────────────┬──────────────┬────────────┐\n"
+    printf "│ %-15s │ %12s │ %12s │ %10s │\n" "エージェント" "入力トークン" "出力トークン" "費用 (USD)"
+    printf "├─────────────────┼──────────────┼──────────────┼────────────┤\n"
+
+    # Leader と Sub-Leaders
+    for i in "${!agents[@]}"; do
+        local role="${agents[$i]}"
+        local name="${agent_names[$i]}"
+
+        if [[ -n "$target_agent" ]] && [[ "$target_agent" != "$role" ]] && [[ "$target_agent" != "ignitians" ]]; then
+            continue
+        fi
+
+        if [[ -n "${agent_input[$role]:-}" ]]; then
+            local input_fmt=$(format_number "${agent_input[$role]}")
+            local output_fmt=$(format_number "${agent_output[$role]}")
+            local cost_fmt=$(printf "%.2f" "${agent_cost[$role]}")
+            printf "│ %-15s │ %12s │ %12s │   \$%7s │\n" "$name" "$input_fmt" "$output_fmt" "$cost_fmt"
+        fi
+    done
+
+    # IGNITIANs
+    if [[ -z "$target_agent" ]] || [[ "$target_agent" == "ignitians" ]]; then
+        if [[ $ignitian_count -gt 0 ]]; then
+            printf "├─────────────────┼──────────────┼──────────────┼────────────┤\n"
+
+            if [[ "$detailed" == true ]]; then
+                # 詳細表示: 各IGNITIANを個別に表示
+                for key in $(echo "${!ignitian_data[@]}" | tr ' ' '\n' | sort -V); do
+                    local data="${ignitian_data[$key]}"
+                    local input=$(echo "$data" | cut -d: -f1)
+                    local output=$(echo "$data" | cut -d: -f2)
+                    local cost=$(echo "$data" | cut -d: -f5)
+                    local input_fmt=$(format_number "$input")
+                    local output_fmt=$(format_number "$output")
+                    local cost_fmt=$(printf "%.2f" "$cost")
+                    local display_name=$(echo "$key" | sed 's/ignitian_/IGNITIAN-/')
+                    printf "│ %-15s │ %12s │ %12s │   \$%7s │\n" "$display_name" "$input_fmt" "$output_fmt" "$cost_fmt"
+                done
+            else
+                # 集計表示
+                local ignitian_input_fmt=$(format_number "$ignitian_input")
+                local ignitian_output_fmt=$(format_number "$ignitian_output")
+                local ignitian_cost_fmt=$(printf "%.2f" "$ignitian_cost")
+                printf "│ IGNITIANs (%d)   │ %12s │ %12s │   \$%7s │\n" "$ignitian_count" "$ignitian_input_fmt" "$ignitian_output_fmt" "$ignitian_cost_fmt"
+            fi
+        fi
+    fi
+
+    # 合計
+    if [[ -z "$target_agent" ]]; then
+        printf "├─────────────────┼──────────────┼──────────────┼────────────┤\n"
+        local total_input_fmt=$(format_number "$total_input")
+        local total_output_fmt=$(format_number "$total_output")
+        local total_cost_fmt=$(printf "%.2f" "$total_cost")
+        local jpy_cost=$(printf "%.0f" "$(echo "$total_cost * $EXCHANGE_RATE" | bc)")
+        local jpy_fmt=$(format_number "$jpy_cost")
+        printf "│ %-15s │ %12s │ %12s │   \$%7s │\n" "合計" "$total_input_fmt" "$total_output_fmt" "$total_cost_fmt"
+        printf "│                 │              │              │ (約¥%s) │\n" "$jpy_fmt"
+    fi
+
+    printf "└─────────────────┴──────────────┴──────────────┴────────────┘\n"
+
+    echo ""
+    echo -e "${BLUE}料金:${NC} Claude Opus 4.5 (\$${PRICE_INPUT}/1M入力, \$${PRICE_OUTPUT}/1M出力)"
+
+    # 詳細表示の場合はキャッシュ情報も表示
+    if [[ "$detailed" == true ]]; then
+        echo ""
+        echo -e "${BLUE}キャッシュ使用量:${NC}"
+        echo "  キャッシュ読み込み: $(format_number "$total_cache_read") トークン"
+        echo "  キャッシュ作成: $(format_number "$total_cache_creation") トークン"
+    fi
 }
 
 # =============================================================================
@@ -1321,6 +2016,31 @@ cmd_help() {
             echo ""
             echo "実行中のIGNITEセッション一覧を表示します"
             ;;
+        cost)
+            echo "使用方法: ./scripts/ignite cost [オプション]"
+            echo ""
+            echo "トークン消費量と概算費用を表示します"
+            echo ""
+            echo "オプション:"
+            echo "  -s, --session <id>     対象セッションIDを指定"
+            echo "  -w, --workspace <dir>  ワークスペースを指定"
+            echo "  -a, --agent <role>     特定エージェントのみ表示"
+            echo "  -d, --detailed         詳細表示（IGNITIANsの個別表示）"
+            echo "  -j, --json             JSON形式で出力"
+            echo "  -l, --list             コスト履歴一覧を表示"
+            echo "  -h, --help             このヘルプを表示"
+            echo ""
+            echo "エージェント:"
+            echo "  leader, strategist, architect, evaluator, coordinator, innovator, ignitians"
+            echo ""
+            echo "例:"
+            echo "  ./scripts/ignite cost                    # 現在のセッションのコスト"
+            echo "  ./scripts/ignite cost -l                 # コスト履歴一覧"
+            echo "  ./scripts/ignite cost -s proj-a          # 特定セッションのコスト"
+            echo "  ./scripts/ignite cost -a leader          # Leaderのみ表示"
+            echo "  ./scripts/ignite cost -d                 # 詳細表示"
+            echo "  ./scripts/ignite cost -j                 # JSON出力"
+            ;;
         "")
             echo -e "${BOLD}IGNITE${NC} - Intelligent Generative Networked Interaction-driven Task Engine"
             echo ""
@@ -1332,6 +2052,7 @@ cmd_help() {
             echo "  list      実行中のセッション一覧"
             echo "  plan      タスクを投入"
             echo "  status    状態を確認"
+            echo "  cost      トークン消費量・費用を表示"
             echo "  attach    tmuxセッションに接続"
             echo "  activate  エージェントをアクティベート"
             echo "  notify    エージェントに通知"
@@ -1382,6 +2103,7 @@ main() {
         list)     cmd_list ;;
         plan)     shift; cmd_plan "$@" ;;
         status)   shift; cmd_status "$@" ;;
+        cost)     shift; cmd_cost "$@" ;;
         attach)   shift; cmd_attach "$@" ;;
         activate) shift; cmd_activate "$@" ;;
         notify)   shift; cmd_notify "$@" ;;

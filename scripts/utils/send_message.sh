@@ -26,7 +26,7 @@ TIMESTAMP=$(date -Iseconds)
 MESSAGE_ID=$(date +%s)
 
 # 宛先ディレクトリ
-QUEUE_DIR="workspace/queue/${TO}"
+QUEUE_DIR="${WORKSPACE_DIR:-workspace}/queue/${TO}"
 
 if [ ! -d "$QUEUE_DIR" ]; then
     echo "❌ エラー: $QUEUE_DIR が存在しません"

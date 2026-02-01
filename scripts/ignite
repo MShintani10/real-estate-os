@@ -844,6 +844,7 @@ cmd_clean() {
         echo "  - workspace/logs/*"
         echo "  - workspace/context/*"
         echo "  - workspace/state/*"
+        echo "  - workspace/archive/*"
         echo "  - workspace/dashboard.md"
         echo "  - workspace/system_config.yaml"
         echo "  - workspace/coordinator_state.yaml"
@@ -869,6 +870,8 @@ cmd_clean() {
     rm -f workspace/system_config.yaml
     rm -f workspace/coordinator_state.yaml
     rm -rf workspace/state/*
+    rm -rf workspace/archive/*
+    mkdir -p workspace/archive/{leader,strategist,coordinator}
 
     print_success "workspaceをクリアしました"
 }

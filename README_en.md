@@ -69,7 +69,12 @@ After startup completes, you'll be prompted to attach to the tmux session.
 
 # Force restart by terminating existing session
 ./scripts/ignite start -f
+
+# Start with custom session ID and workspace
+./scripts/ignite start -s my-session -w /path/to/workspace
 ```
+
+Using `-s`/`--session` and `-w`/`--workspace` options allows you to run multiple projects in parallel. See the "Running Multiple Projects in Parallel" section for details.
 
 ### 2. Submit a Task
 
@@ -95,10 +100,13 @@ To add context:
 #### Via Dashboard
 
 ```bash
-# Real-time monitoring
-watch -n 5 cat workspace/dashboard.md
+# Check via status command (recommended)
+./scripts/ignite status
 
-# Or display once
+# Real-time monitoring (adjust path if using custom workspace)
+watch -n 5 ./scripts/ignite status
+
+# Or display dashboard file directly
 cat workspace/dashboard.md
 ```
 
@@ -336,9 +344,42 @@ ignite/
 | `attach` | Connect to tmux session | `./scripts/ignite attach` |
 | `logs` | View logs | `./scripts/ignite logs` |
 | `clean` | Clear workspace | `./scripts/ignite clean` |
+| `list` | List sessions | `./scripts/ignite list` |
 | `help` | Show help | `./scripts/ignite help` |
 
 For detailed help, use `./scripts/ignite help <command>`.
+
+### Running Multiple Projects in Parallel
+
+You can run multiple projects simultaneously by specifying session ID and workspace.
+
+```bash
+# Start project A
+./scripts/ignite start -s proj-a -w /tmp/workspace-a
+
+# Start project B in a separate session
+./scripts/ignite start -s proj-b -w /tmp/workspace-b
+
+# List all sessions
+./scripts/ignite list
+
+# Submit tasks to each project
+./scripts/ignite plan "Feature A" -s proj-a -w /tmp/workspace-a
+./scripts/ignite plan "Feature B" -s proj-b -w /tmp/workspace-b
+
+# Check status of each project
+./scripts/ignite status -s proj-a -w /tmp/workspace-a
+./scripts/ignite status -s proj-b -w /tmp/workspace-b
+
+# Attach to each project
+./scripts/ignite attach -s proj-a
+./scripts/ignite attach -s proj-b
+```
+
+**Notes:**
+- Each session must have its own independent workspace
+- If session ID is not specified, the default `ignite-session` is used
+- If workspace is not specified, the default `workspace/` directory is used
 
 ### Usage Examples by Task Type
 
@@ -397,12 +438,12 @@ nano config/ignitians.yaml
 
 ```yaml
 ignitians:
-  default: 8    # Default
+  default: 3    # Default
 
   presets:
-    light: 16   # Light tasks (file operations, etc.)
-    normal: 8   # Normal tasks (implementation, etc.)
-    heavy: 4    # Heavy tasks (analysis, etc.)
+    light: 1   # Light tasks (file operations, etc.)
+    normal: 3   # Normal tasks (implementation, etc.)
+    heavy: 6    # Heavy tasks (analysis, etc.)
 ```
 
 Restart the system after changes:
@@ -416,7 +457,10 @@ Restart the system after changes:
 **Basic Operations:**
 
 ```bash
-# Attach to session
+# Attach to session (recommended)
+./scripts/ignite attach
+
+# Or use tmux command directly (session name is the one specified at startup)
 tmux attach -t ignite-session
 
 # Detach (within session)
@@ -676,8 +720,8 @@ For complex tasks, provide context via the `-c` option:
 # Check status
 ./scripts/ignite status
 
-# Monitor dashboard every 5 seconds
-watch -n 5 cat workspace/dashboard.md
+# Monitor status every 5 seconds
+watch -n 5 ./scripts/ignite status
 
 # Real-time log monitoring
 ./scripts/ignite logs -f

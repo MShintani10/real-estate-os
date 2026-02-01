@@ -1,9 +1,15 @@
 # IGNITE - Hierarchical Multi-Agent System
 
+<p align="center">
+  <img src="images/ignite-logo.jpg" width="200">
+</p>
+
 **IGNITE (Intelligent Generative Networked Interaction-driven Task Engine)** is a hierarchical multi-agent system utilizing the claude code CLI. A Leader, five specialized Sub-Leaders, and a variable number of IGNITIANS workers collaborate to execute complex tasks in parallel.<br>
 IGNITE may not be able to sing, dance, or go live streaming just yet, but they’re training hard every single day, aiming for the day they can shine on stage and put on a wonderful show for all their fans.
 
-<img src="images/IGNITE-members.jpg">
+<p align="center">
+  <img src="images/IGNITE-members.jpg">
+</p>
 
 ## 🌟 Features
 

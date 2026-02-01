@@ -1,9 +1,15 @@
 # IGNITE - 階層型マルチエージェントシステム
 
+<p align="center">
+  <img src="images/ignite-logo.jpg" width="200">
+</p>
+
 **IGNITE (Intelligent Generative Networked Interaction-driven Task Engine)** は、claude code CLIを活用した階層型マルチエージェントシステムです。Leader、5つの専門Sub-Leaders、および可変数のIGNITIANSワーカーが協調して、複雑なタスクを並列実行します。<br>
 IGNITEは今はまだ歌って踊ってライブ配信することはできませんが、いずれ皆さんの前で素敵なステージを見せることができるよう日々努力を重ねています。
 
-<img src="images/IGNITE-members.jpg">
+<p align="center">
+  <img src="images/IGNITE-members.jpg">
+</p>
 
 ## 🌟 特徴
 

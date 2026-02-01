@@ -843,7 +843,10 @@ cmd_clean() {
         echo "  - workspace/reports/*"
         echo "  - workspace/logs/*"
         echo "  - workspace/context/*"
+        echo "  - workspace/state/*"
         echo "  - workspace/dashboard.md"
+        echo "  - workspace/system_config.yaml"
+        echo "  - workspace/coordinator_state.yaml"
         echo ""
         read -p "続行しますか? (y/N): " -n 1 -r
         echo
@@ -863,6 +866,9 @@ cmd_clean() {
     rm -rf workspace/logs/*
     rm -rf workspace/context/*
     rm -f workspace/dashboard.md
+    rm -f workspace/system_config.yaml
+    rm -f workspace/coordinator_state.yaml
+    rm -rf workspace/state/*
 
     print_success "workspaceをクリアしました"
 }

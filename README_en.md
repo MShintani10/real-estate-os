@@ -397,12 +397,12 @@ nano config/ignitians.yaml
 
 ```yaml
 ignitians:
-  default: 8    # Default
+  default: 3    # Default
 
   presets:
-    light: 16   # Light tasks (file operations, etc.)
-    normal: 8   # Normal tasks (implementation, etc.)
-    heavy: 4    # Heavy tasks (analysis, etc.)
+    light: 1   # Light tasks (file operations, etc.)
+    normal: 3   # Normal tasks (implementation, etc.)
+    heavy: 6    # Heavy tasks (analysis, etc.)
 ```
 
 Restart the system after changes:

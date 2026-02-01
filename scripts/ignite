@@ -10,6 +10,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SESSION_NAME="ignite-session"
 
+# Sub-Leaders 定義
+SUB_LEADERS=("strategist" "architect" "evaluator" "coordinator" "innovator")
+SUB_LEADER_NAMES=("義賀リオ" "祢音ナナ" "衣結ノア" "通瀬アイナ" "恵那ツムギ")
+
+# デフォルト設定
+DEFAULT_WORKER_COUNT=8
+
 # カラー定義
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -31,27 +38,177 @@ session_exists() {
     tmux has-session -t "$SESSION_NAME" 2>/dev/null
 }
 
+# 設定ファイルからワーカー数を取得
+get_worker_count() {
+    local config_file="$PROJECT_ROOT/config/ignitians.yaml"
+    if [[ -f "$config_file" ]]; then
+        local count
+        count=$(grep "default:" "$config_file" | head -1 | awk '{print $2}')
+        if [[ -n "$count" ]] && [[ "$count" =~ ^[0-9]+$ ]]; then
+            echo "$count"
+            return
+        fi
+    fi
+    echo "$DEFAULT_WORKER_COUNT"
+}
+
+# エージェント起動関数（最大3回リトライ）
+start_agent() {
+    local role="$1"      # strategist, architect, etc.
+    local name="$2"      # 義賀リオ, 祢音ナナ, etc.
+    local pane="$3"      # ペイン番号
+    local max_retries=3
+    local retry=0
+
+    while [[ $retry -lt $max_retries ]]; do
+        print_info "${name} を起動中... (試行 $((retry+1))/$max_retries)"
+
+        # ペイン作成
+        tmux split-window -t "$SESSION_NAME:ignite" -h
+        tmux select-layout -t "$SESSION_NAME:ignite" tiled
+
+        # Claude CLI 起動
+        tmux send-keys -t "$SESSION_NAME:ignite.$pane" \
+            "cd '$PROJECT_ROOT' && claude --dangerously-skip-permissions" Enter
+        sleep 3
+
+        # 権限確認通過
+        tmux send-keys -t "$SESSION_NAME:ignite.$pane" Down
+        sleep 0.5
+        tmux send-keys -t "$SESSION_NAME:ignite.$pane" Enter
+        sleep 8
+
+        # 起動確認（ペインが生きているか）
+        if tmux list-panes -t "$SESSION_NAME:ignite" 2>/dev/null | grep -q "$pane:"; then
+            # システムプロンプト読み込み
+            tmux send-keys -t "$SESSION_NAME:ignite.$pane" \
+                "instructions/${role}.md を読んで、あなたは${name}として振る舞ってください。workspace/queue/${role}/ のメッセージを監視してください。"
+            sleep 0.3
+            tmux send-keys -t "$SESSION_NAME:ignite.$pane" C-m
+            sleep 2  # プロンプト送信後の安定待機
+            print_success "${name} 起動完了"
+            return 0
+        fi
+
+        print_warning "${name} 起動失敗、リトライ中..."
+        ((retry++))
+        sleep 2
+    done
+
+    print_error "${name} 起動に失敗しました（${max_retries}回試行）"
+    return 1
+}
+
+# IGNITIANS 起動関数
+start_ignitian() {
+    local id="$1"        # IGNITIAN番号 (1, 2, 3, ...)
+    local pane="$2"      # ペイン番号
+    local max_retries=3
+    local retry=0
+
+    while [[ $retry -lt $max_retries ]]; do
+        print_info "IGNITIAN-${id} を起動中... (試行 $((retry+1))/$max_retries)"
+
+        # ペイン作成
+        tmux split-window -t "$SESSION_NAME:ignite" -h
+        tmux select-layout -t "$SESSION_NAME:ignite" tiled
+
+        # Claude CLI 起動
+        tmux send-keys -t "$SESSION_NAME:ignite.$pane" \
+            "cd '$PROJECT_ROOT' && claude --dangerously-skip-permissions" Enter
+        sleep 3
+
+        # 権限確認通過
+        tmux send-keys -t "$SESSION_NAME:ignite.$pane" Down
+        sleep 0.5
+        tmux send-keys -t "$SESSION_NAME:ignite.$pane" Enter
+        sleep 8
+
+        # 起動確認
+        if tmux list-panes -t "$SESSION_NAME:ignite" 2>/dev/null | grep -q "$pane:"; then
+            # システムプロンプト読み込み
+            tmux send-keys -t "$SESSION_NAME:ignite.$pane" \
+                "instructions/ignitians.md を読んで、あなたはIGNITIAN-${id}として振る舞ってください。workspace/queue/ignitians/ignitian_${id}.yaml を監視してください。"
+            sleep 0.3
+            tmux send-keys -t "$SESSION_NAME:ignite.$pane" C-m
+            sleep 2  # プロンプト送信後の安定待機
+            print_success "IGNITIAN-${id} 起動完了"
+            return 0
+        fi
+
+        print_warning "IGNITIAN-${id} 起動失敗、リトライ中..."
+        ((retry++))
+        sleep 2
+    done
+
+    print_error "IGNITIAN-${id} 起動に失敗しました（${max_retries}回試行）"
+    return 1
+}
+
 # =============================================================================
 # start コマンド
 # =============================================================================
 cmd_start() {
     local no_attach=false
     local force=false
+    local agent_mode="full"    # full, leader, sub
+    local worker_count=""
+    local no_workers=false
 
     # オプション解析
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -n|--no-attach) no_attach=true; shift ;;
             -f|--force) force=true; shift ;;
+            -a|--agents)
+                agent_mode="$2"
+                if [[ ! "$agent_mode" =~ ^(full|leader|sub)$ ]]; then
+                    print_error "無効なエージェントモード: $agent_mode (full/leader/sub)"
+                    exit 1
+                fi
+                shift 2
+                ;;
+            --workers)
+                worker_count="$2"
+                if [[ ! "$worker_count" =~ ^[0-9]+$ ]] || [[ "$worker_count" -lt 1 ]] || [[ "$worker_count" -gt 32 ]]; then
+                    print_error "ワーカー数は1-32の範囲で指定してください: $worker_count"
+                    exit 1
+                fi
+                shift 2
+                ;;
+            --no-workers) no_workers=true; shift ;;
             -h|--help) cmd_help start; exit 0 ;;
             *) print_error "Unknown option: $1"; cmd_help start; exit 1 ;;
         esac
     done
 
+    # ワーカー数の決定
+    if [[ -z "$worker_count" ]]; then
+        worker_count=$(get_worker_count)
+    fi
+
+    # --no-workers が指定された場合
+    if [[ "$no_workers" == true ]]; then
+        worker_count=0
+    fi
+
+    # agent_mode が leader の場合は Sub-Leaders も起動しない
+    if [[ "$agent_mode" == "leader" ]]; then
+        worker_count=0
+    fi
+
     # エラートラップ
     trap 'print_error "エラーが発生しました (line $LINENO)"' ERR
 
     print_header "IGNITE システム起動"
+    echo ""
+    echo -e "${BLUE}起動モード:${NC} $agent_mode"
+    if [[ "$agent_mode" != "leader" ]]; then
+        echo -e "${BLUE}Sub-Leaders:${NC} ${#SUB_LEADERS[@]}名"
+    fi
+    if [[ "$worker_count" -gt 0 ]]; then
+        echo -e "${BLUE}IGNITIANs:${NC} ${worker_count}並列"
+    fi
     echo ""
 
     cd "$PROJECT_ROOT"
@@ -84,11 +241,6 @@ cmd_start() {
     mkdir -p workspace/context
     mkdir -p workspace/logs
 
-    # .claude/prompts/ ディレクトリの準備
-    print_info ".claude/prompts/ にシステムプロンプトをコピー中..."
-    mkdir -p .claude/prompts
-    cp instructions/*.md .claude/prompts/
-
     # 初期ダッシュボードの作成
     print_info "初期ダッシュボードを作成中..."
     cat > workspace/dashboard.md <<EOF
@@ -111,24 +263,38 @@ EOF
 
     # tmuxセッション作成
     print_info "tmuxセッションを作成中..."
-    tmux new-session -d -s "$SESSION_NAME" -n ignite -x 200 -y 50
+    tmux new-session -d -s "$SESSION_NAME" -n ignite
+    sleep 0.5  # セッション作成を待機
 
     # Leader ペイン (pane 0)
     print_info "Leader (伊羽ユイ) を起動中..."
-    tmux send-keys -t "$SESSION_NAME:0.0" \
-        "cd '$PROJECT_ROOT' && claude-code --dangerously-skip-permissions" Enter
+    tmux send-keys -t "$SESSION_NAME:ignite" \
+        "cd '$PROJECT_ROOT' && claude --dangerously-skip-permissions" Enter
 
-    # 起動待機
+    # 起動待機（確認プロンプト表示を待つ）
     print_warning "Leaderの起動を待機中... (3秒)"
     sleep 3
 
-    # Leaderにプロンプトをロード
-    print_info "Leaderシステムプロンプトをロード中..."
-    tmux send-keys -t "$SESSION_NAME:0.0" \
-        "/prompt leader" Enter
+    # 確認プロンプトを通過（下矢印で "Yes, I accept" を選択してEnter）
+    print_info "権限確認を承諾中..."
+    tmux send-keys -t "$SESSION_NAME:ignite" Down
+    sleep 0.5
+    tmux send-keys -t "$SESSION_NAME:ignite" Enter
 
-    # さらに待機（プロンプトロード時間）
-    sleep 2
+    # Claude Codeの起動完了を待機
+    print_warning "Claude Codeの起動を待機中... (8秒)"
+    sleep 8
+
+    # Leaderにシステムプロンプトを読み込ませる
+    print_info "Leaderシステムプロンプトをロード中..."
+    tmux send-keys -t "$SESSION_NAME:ignite" \
+        "instructions/leader.md を読んで、あなたはLeader（伊羽ユイ）として振る舞ってください。その後、workspace/queue/leader/ 内のメッセージを確認してください。"
+    sleep 0.3
+    tmux send-keys -t "$SESSION_NAME:ignite" C-m
+
+    # プロンプトロード完了を待機
+    print_warning "Leaderの初期化を待機中... (10秒)"
+    sleep 10
 
     # 初期メッセージの送信
     print_info "Leaderに初期化メッセージを送信中..."
@@ -144,12 +310,68 @@ payload:
 status: pending
 EOF
 
-    # Leaderに新しいメッセージがあることを通知
-    tmux send-keys -t "$SESSION_NAME:0.0" \
-        "echo '📨 新しいメッセージがあります: workspace/queue/leader/'" Enter
-
     echo ""
     print_success "IGNITE Leader が起動しました"
+
+    # Sub-Leaders の起動 (agent_mode が leader 以外の場合)
+    if [[ "$agent_mode" != "leader" ]]; then
+        echo ""
+        print_header "Sub-Leaders 起動"
+        echo ""
+
+        local pane_num=1
+        for i in "${!SUB_LEADERS[@]}"; do
+            local role="${SUB_LEADERS[$i]}"
+            local name="${SUB_LEADER_NAMES[$i]}"
+
+            if ! start_agent "$role" "$name" "$pane_num"; then
+                print_warning "Sub-Leader ${name} の起動に失敗しましたが、続行します"
+            fi
+
+            ((pane_num++))
+        done
+
+        print_success "Sub-Leaders 起動完了 (${#SUB_LEADERS[@]}名)"
+    fi
+
+    # IGNITIANs の起動 (worker_count > 0 かつ agent_mode が full の場合)
+    local actual_ignitian_count=0
+    if [[ "$worker_count" -gt 0 ]] && [[ "$agent_mode" == "full" ]]; then
+        echo ""
+        print_header "IGNITIANs 起動"
+        echo ""
+
+        # Sub-Leaders の後のペイン番号から開始
+        local start_pane=$((1 + ${#SUB_LEADERS[@]}))
+
+        for ((i=1; i<=worker_count; i++)); do
+            local pane_num=$((start_pane + i - 1))
+
+            if ! start_ignitian "$i" "$pane_num"; then
+                print_warning "IGNITIAN-${i} の起動に失敗しましたが、続行します"
+            else
+                actual_ignitian_count=$((actual_ignitian_count + 1))
+            fi
+        done
+
+        print_success "IGNITIANs 起動完了 (${actual_ignitian_count}並列)"
+    fi
+
+    # システム設定ファイルを作成（IGNITIANs数などを記録）
+    print_info "システム設定を保存中..."
+    cat > workspace/system_config.yaml <<EOF
+# IGNITE システム設定（自動生成）
+# このファイルはシステム起動時に自動的に更新されます
+
+system:
+  started_at: "$(date -Iseconds)"
+  agent_mode: "${agent_mode}"
+
+ignitians:
+  count: ${actual_ignitian_count}
+  ids: [$(seq -s ', ' 1 ${actual_ignitian_count} 2>/dev/null || echo "")]
+EOF
+
     echo ""
     print_header "起動完了"
     echo ""
@@ -171,6 +393,111 @@ EOF
             tmux attach -t "$SESSION_NAME"
         fi
     fi
+}
+
+# =============================================================================
+# activate コマンド - 各エージェントにコマンドを再送信
+# =============================================================================
+cmd_activate() {
+    if ! session_exists; then
+        print_error "ignite-session が見つかりません"
+        exit 1
+    fi
+
+    print_header "エージェントをアクティベート中"
+    echo ""
+
+    # ペイン数を確認
+    local pane_count
+    pane_count=$(tmux list-panes -t "$SESSION_NAME" 2>/dev/null | wc -l)
+
+    print_info "検出されたペイン数: $pane_count"
+
+    # 各paneに対してEnterを送信して、入力待ちのコマンドを実行
+    for ((i=1; i<pane_count; i++)); do
+        print_info "pane $i をアクティベート中..."
+        tmux send-keys -t "$SESSION_NAME:ignite.$i" Enter
+        sleep 1
+    done
+
+    print_success "全エージェントにアクティベーション信号を送信しました"
+    echo ""
+    echo "各エージェントがシステムプロンプトを読み込んでいます。"
+    echo -e "状態確認: ${YELLOW}./scripts/ignite status${NC}"
+}
+
+# =============================================================================
+# notify コマンド - 特定のエージェントにメッセージを送信
+# =============================================================================
+cmd_notify() {
+    local target=""
+    local message=""
+
+    # 引数解析
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help) cmd_help notify; exit 0 ;;
+            *)
+                if [[ -z "$target" ]]; then
+                    target="$1"
+                elif [[ -z "$message" ]]; then
+                    message="$1"
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    if [[ -z "$target" ]] || [[ -z "$message" ]]; then
+        print_error "ターゲットとメッセージを指定してください"
+        echo "使用方法: ./scripts/ignite notify <target> \"message\""
+        echo "ターゲット: leader, strategist, architect, evaluator, coordinator, innovator, ignitians"
+        exit 1
+    fi
+
+    if ! session_exists; then
+        print_error "ignite-session が見つかりません"
+        exit 1
+    fi
+
+    cd "$PROJECT_ROOT"
+
+    # メッセージファイル作成
+    local timestamp=$(date -Iseconds)
+    local message_id=$(date +%s%N)
+    local message_file="workspace/queue/${target}/notify_${message_id}.yaml"
+
+    mkdir -p "workspace/queue/${target}"
+
+    cat > "$message_file" <<EOF
+type: notification
+from: user
+to: ${target}
+timestamp: "${timestamp}"
+priority: normal
+payload:
+  message: "${message}"
+status: pending
+EOF
+
+    print_success "メッセージを送信しました: $message_file"
+
+    # ペイン番号を特定して通知
+    local pane_num=0
+    case "$target" in
+        leader) pane_num=0 ;;
+        strategist) pane_num=1 ;;
+        architect) pane_num=2 ;;
+        evaluator) pane_num=3 ;;
+        coordinator) pane_num=4 ;;
+        innovator) pane_num=5 ;;
+        ignitians) pane_num=6 ;;  # 最初のIGNITIANに送信
+    esac
+
+    tmux send-keys -t "$SESSION_NAME:ignite.$pane_num" \
+        "workspace/queue/${target}/ に新しいメッセージがあります。確認してください。" Enter
+
+    print_success "pane $pane_num に通知を送信しました"
 }
 
 # =============================================================================
@@ -305,14 +632,12 @@ EOF
 
     print_success "メッセージを作成しました: $message_file"
 
-    # Leaderに通知（tmux send-keys）
-    tmux send-keys -t "$SESSION_NAME:0.0" "echo ''" Enter
-    tmux send-keys -t "$SESSION_NAME:0.0" "echo '📨 ════════════════════════════════════════'" Enter
-    tmux send-keys -t "$SESSION_NAME:0.0" "echo '📨 新しいタスクが投入されました！'" Enter
-    tmux send-keys -t "$SESSION_NAME:0.0" "echo '📨 目標: ${goal}'" Enter
-    tmux send-keys -t "$SESSION_NAME:0.0" "echo '📨 メッセージファイル: ${message_file}'" Enter
-    tmux send-keys -t "$SESSION_NAME:0.0" "echo '📨 ════════════════════════════════════════'" Enter
-    tmux send-keys -t "$SESSION_NAME:0.0" "echo ''" Enter
+    # Leaderに通知（自然言語プロンプトで送信）- pane 0 を明示的に指定
+    sleep 0.5
+    tmux send-keys -t "$SESSION_NAME:ignite.0" \
+        "workspace/queue/leader/ に新しいメッセージがあります。${message_file} を確認して処理してください。目標: ${goal}"
+    sleep 0.3
+    tmux send-keys -t "$SESSION_NAME:ignite.0" C-m
 
     echo ""
     print_success "タスク '${goal}' を投入しました"
@@ -337,8 +662,33 @@ cmd_status() {
         print_success "tmuxセッション: 実行中"
 
         # ペイン数確認
-        local pane_count=$(tmux list-panes -t "$SESSION_NAME" | wc -l)
+        local pane_count
+        pane_count=$(tmux list-panes -t "$SESSION_NAME" 2>/dev/null | wc -l)
         echo -e "${BLUE}  ペイン数: ${pane_count}${NC}"
+
+        # エージェント構成の推定
+        echo ""
+        print_header "エージェント状態"
+        echo ""
+        echo -e "  ${GREEN}✓${NC} pane 0: Leader (伊羽ユイ)"
+
+        if [[ "$pane_count" -gt 1 ]]; then
+            local sub_count=$((pane_count > 6 ? 5 : pane_count - 1))
+            for i in $(seq 1 $sub_count); do
+                local idx=$((i - 1))
+                if [[ $idx -lt ${#SUB_LEADERS[@]} ]]; then
+                    echo -e "  ${GREEN}✓${NC} pane ${i}: ${SUB_LEADER_NAMES[$idx]} (${SUB_LEADERS[$idx]})"
+                fi
+            done
+        fi
+
+        if [[ "$pane_count" -gt 6 ]]; then
+            local ignitian_count=$((pane_count - 6))
+            for i in $(seq 1 $ignitian_count); do
+                local pane_num=$((5 + i))
+                echo -e "  ${GREEN}✓${NC} pane ${pane_num}: IGNITIAN-${i}"
+            done
+        fi
     else
         print_error "tmuxセッション: 停止"
         exit 1
@@ -530,14 +880,28 @@ cmd_help() {
             echo "IGNITE システムを起動します"
             echo ""
             echo "オプション:"
-            echo "  -n, --no-attach    起動後に自動アタッチしない"
-            echo "  -f, --force        既存セッションを強制終了して再起動"
-            echo "  -h, --help         このヘルプを表示"
+            echo "  -n, --no-attach       起動後に自動アタッチしない"
+            echo "  -f, --force           既存セッションを強制終了して再起動"
+            echo "  -a, --agents <mode>   エージェント起動モード"
+            echo "                          full:   全エージェント（デフォルト）"
+            echo "                          leader: Leaderのみ"
+            echo "                          sub:    Leader + Sub-Leaders（IGNITIANsなし）"
+            echo "  --workers <N>         IGNITIANs並列数（1-32）"
+            echo "  --no-workers          IGNITIANsを起動しない"
+            echo "  -h, --help            このヘルプを表示"
+            echo ""
+            echo "ペインレイアウト (fullモード):"
+            echo "  pane 0:    Leader (伊羽ユイ)"
+            echo "  pane 1-5:  Sub-Leaders (義賀リオ, 祢音ナナ, 衣結ノア, 通瀬アイナ, 恵那ツムギ)"
+            echo "  pane 6+:   IGNITIANs (デフォルト8並列)"
             echo ""
             echo "例:"
-            echo "  ./scripts/ignite start"
-            echo "  ./scripts/ignite start --no-attach"
-            echo "  ./scripts/ignite start -f"
+            echo "  ./scripts/ignite start                    # 全エージェント起動"
+            echo "  ./scripts/ignite start -a leader          # Leaderのみ起動"
+            echo "  ./scripts/ignite start -a sub             # Leader + Sub-Leadersのみ"
+            echo "  ./scripts/ignite start --workers 4        # IGNITIANs 4並列で起動"
+            echo "  ./scripts/ignite start --no-workers       # IGNITIANsなしで起動"
+            echo "  ./scripts/ignite start -f --no-attach     # 強制再起動、アタッチなし"
             ;;
         stop)
             echo "使用方法: ./scripts/ignite stop [オプション]"
@@ -618,6 +982,27 @@ cmd_help() {
             echo "  ./scripts/ignite clean"
             echo "  ./scripts/ignite clean -y"
             ;;
+        activate)
+            echo "使用方法: ./scripts/ignite activate"
+            echo ""
+            echo "起動済みのエージェントをアクティベートします"
+            echo ""
+            echo "説明:"
+            echo "  起動時にシステムプロンプトが正しく実行されなかった場合に使用します。"
+            echo "  各ペインに Enter を送信して、待機中のコマンドを実行させます。"
+            ;;
+        notify)
+            echo "使用方法: ./scripts/ignite notify <target> \"message\""
+            echo ""
+            echo "特定のエージェントにメッセージを送信します"
+            echo ""
+            echo "ターゲット:"
+            echo "  leader, strategist, architect, evaluator, coordinator, innovator, ignitians"
+            echo ""
+            echo "例:"
+            echo "  ./scripts/ignite notify strategist \"戦略を立案してください\""
+            echo "  ./scripts/ignite notify ignitians \"タスク1を実行してください\""
+            ;;
         "")
             echo -e "${BOLD}IGNITE${NC} - Intelligent Generative Networked Interaction-driven Task Engine"
             echo ""
@@ -629,6 +1014,8 @@ cmd_help() {
             echo "  plan      タスクを投入"
             echo "  status    状態を確認"
             echo "  attach    tmuxセッションに接続"
+            echo "  activate  エージェントをアクティベート"
+            echo "  notify    エージェントに通知"
             echo "  logs      ログを表示"
             echo "  clean     workspaceをクリア"
             echo "  help      ヘルプを表示"
@@ -659,14 +1046,16 @@ cmd_help() {
 # =============================================================================
 main() {
     case "${1:-}" in
-        start)  shift; cmd_start "$@" ;;
-        stop)   shift; cmd_stop "$@" ;;
-        plan)   shift; cmd_plan "$@" ;;
-        status) cmd_status ;;
-        attach) cmd_attach ;;
-        logs)   shift; cmd_logs "$@" ;;
-        clean)  shift; cmd_clean "$@" ;;
-        help)   shift; cmd_help "$@" ;;
+        start)    shift; cmd_start "$@" ;;
+        stop)     shift; cmd_stop "$@" ;;
+        plan)     shift; cmd_plan "$@" ;;
+        status)   cmd_status ;;
+        attach)   cmd_attach ;;
+        activate) cmd_activate ;;
+        notify)   shift; cmd_notify "$@" ;;
+        logs)     shift; cmd_logs "$@" ;;
+        clean)    shift; cmd_clean "$@" ;;
+        help)     shift; cmd_help "$@" ;;
         -h|--help) cmd_help ;;
         -v|--version) echo "IGNITE v$VERSION" ;;
         "") cmd_help ;;

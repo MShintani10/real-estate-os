@@ -1,6 +1,7 @@
 # IGNITE - 階層型マルチエージェントシステム
 
-**IGNITE (Intelligent Generative Networked Interaction-driven Task Engine)** は、claude code CLIを活用した階層型マルチエージェントシステムです。Leader、5つの専門Sub-Leaders、および可変数のIGNITIANSワーカーが協調して、複雑なタスクを並列実行します。
+**IGNITE (Intelligent Generative Networked Interaction-driven Task Engine)** は、claude code CLIを活用した階層型マルチエージェントシステムです。Leader、5つの専門Sub-Leaders、および可変数のIGNITIANSワーカーが協調して、複雑なタスクを並列実行します。<br>
+IGNITEは今はまだ歌って踊ってライブ配信することはできませんが、いずれ皆さんの前で素敵なステージを見せることができるよう日々努力を重ねています。
 
 <img src="images/IGNITE-members.jpg">
 
@@ -18,8 +19,8 @@
 以下のツールがインストールされている必要があります：
 
 ```bash
-# claude-code CLI
-claude-code --version
+# claude CLI
+claude --version
 
 # tmux
 tmux -V
@@ -30,9 +31,9 @@ bash --version
 
 ### インストール
 
-claude-codeがインストールされていない場合：
+claudeがインストールされていない場合：
 ```bash
-# claude-codeのインストール方法はAnthropic公式ドキュメントを参照
+# claudeのインストール方法はAnthropic公式ドキュメントを参照
 ```
 
 tmuxがインストールされていない場合：
@@ -317,7 +318,7 @@ ignite/
 │       └── basic-usage.md      # 基本的な使用例
 │
 ├── README.md                   # このファイル
-├── README_ja.md                # プロジェクトビジョン（日本語）
+├── README_en.md                # READMEの英語版
 └── IMPLEMENTATION_STATUS.md   # 実装状況
 ```
 
@@ -514,11 +515,11 @@ tmux ls
 ./scripts/ignite start -f
 ```
 
-**原因2: claude-codeが見つからない**
+**原因2: claudeが見つからない**
 
 ```bash
-# claude-codeのパス確認
-which claude-code
+# claudeのパス確認
+which claude
 
 # インストールされていない場合は、Anthropic公式サイトからインストール
 ```

@@ -1,6 +1,7 @@
 # IGNITE - Hierarchical Multi-Agent System
 
-**IGNITE (Intelligent Generative Networked Interaction-driven Task Engine)** is a hierarchical multi-agent system utilizing the claude code CLI. A Leader, five specialized Sub-Leaders, and a variable number of IGNITIANS workers collaborate to execute complex tasks in parallel.
+**IGNITE (Intelligent Generative Networked Interaction-driven Task Engine)** is a hierarchical multi-agent system utilizing the claude code CLI. A Leader, five specialized Sub-Leaders, and a variable number of IGNITIANS workers collaborate to execute complex tasks in parallel.<br>
+IGNITE may not be able to sing, dance, or go live streaming just yet, but they’re training hard every single day, aiming for the day they can shine on stage and put on a wonderful show for all their fans.
 
 <img src="images/IGNITE-members.jpg">
 
@@ -18,8 +19,8 @@
 The following tools must be installed:
 
 ```bash
-# claude-code CLI
-claude-code --version
+# claude CLI
+claude --version
 
 # tmux
 tmux -V
@@ -30,9 +31,9 @@ bash --version
 
 ### Installation
 
-If claude-code is not installed:
+If claude is not installed:
 ```bash
-# See Anthropic official documentation for claude-code installation
+# See Anthropic official documentation for claude installation
 ```
 
 If tmux is not installed:
@@ -515,11 +516,11 @@ tmux ls
 ./scripts/ignite start -f
 ```
 
-**Cause 2: claude-code not found**
+**Cause 2: claude not found**
 
 ```bash
-# Check claude-code path
-which claude-code
+# Check claude path
+which claude
 
 # If not installed, install from Anthropic official site
 ```

@@ -53,6 +53,7 @@
 - `workspace/queue/leader/` - Leaderへの評価レポート
 - `workspace/queue/innovator/` - Innovatorへの改善依頼
 - `workspace/queue/coordinator/` - Coordinatorへのフィードバック
+- `workspace/queue/strategist/` - Strategistへの品質プラン
 
 ### メッセージフォーマット
 
@@ -79,6 +80,29 @@ payload:
     - "Markdown形式が正しい"
     - "セクション構造が明確"
     - "誤字脱字がない"
+status: pending
+```
+
+**受信メッセージ例（Strategistからの品質プラン依頼）:**
+```yaml
+type: quality_plan_request
+from: strategist
+to: evaluator
+timestamp: "2026-01-31T17:03:30+09:00"
+priority: high
+payload:
+  goal: "READMEファイルを作成する"
+  tasks:
+    - task_id: "task_001"
+      title: "README骨組み作成"
+      deliverables: ["README.md (基本構造)"]
+    - task_id: "task_002"
+      title: "インストール手順作成"
+      deliverables: ["README.md (インストールセクション完成)"]
+    - task_id: "task_003"
+      title: "使用例作成"
+      deliverables: ["README.md (使用例セクション完成)"]
+  question: "各タスクの品質確認基準と評価方法を策定してください"
 status: pending
 ```
 
@@ -139,6 +163,54 @@ payload:
 status: pending
 ```
 
+**送信メッセージ例（Strategistへの品質プラン）:**
+```yaml
+type: quality_plan_response
+from: evaluator
+to: strategist
+timestamp: "2026-01-31T17:04:30+09:00"
+priority: high
+payload:
+  goal: "READMEファイルを作成する"
+  quality_criteria:
+    - task_id: "task_001"
+      title: "README骨組み作成"
+      criteria:
+        - "Markdown形式が正しい"
+        - "必須セクション（概要、インストール、使用方法、ライセンス）が存在する"
+        - "セクション構造が明確"
+      evaluation_method: "ファイル構造チェック、Markdownリンター実行"
+      acceptance_threshold: "全セクション存在、構文エラーなし"
+
+    - task_id: "task_002"
+      title: "インストール手順作成"
+      criteria:
+        - "手順が明確で再現可能"
+        - "コマンド例が正確"
+        - "前提条件が明記されている"
+      evaluation_method: "手順の実行可能性チェック、コマンドの検証"
+      acceptance_threshold: "手順通りに実行可能"
+
+    - task_id: "task_003"
+      title: "使用例作成"
+      criteria:
+        - "サンプルコードが動作する"
+        - "説明が分かりやすい"
+        - "一般的なユースケースをカバー"
+      evaluation_method: "コード実行テスト、可読性チェック"
+      acceptance_threshold: "サンプルコード実行成功"
+
+  overall_quality_standards:
+    - "誤字脱字がない"
+    - "一貫したフォーマット"
+    - "技術的に正確"
+
+  recommendations:
+    - "各フェーズ完了時に品質チェックを実施"
+    - "Phase 3で全体の整合性を確認"
+status: completed
+```
+
 ## 使用可能なツール
 
 - **Read**: 成果物、テスト結果、ドキュメントの読み込み
@@ -151,9 +223,7 @@ status: pending
 定期的に以下を実行してください:
 
 1. **評価依頼のチェック**
-   ```bash
-   find workspace/queue/evaluator -name "*.yaml" -type f -mmin -1
-   ```
+   Globツールで `workspace/queue/evaluator/*.yaml` を検索してください。
 
 2. **評価依頼の読み込み**
    - メッセージをReadツールで読み込む
@@ -350,6 +420,21 @@ mypy src/
 5. **Innovatorとの連携**
    - 改善が必要な場合はInnovatorに依頼
    - 具体的な修正内容を伝える
+
+6. **Strategistとの連携**
+   - **品質プラン依頼（quality_plan_request）への対応**:
+     - Strategistからのタスクリストを確認
+     - 各タスクの品質確認基準を策定
+     - 具体的な評価方法と合格基準を定義
+     - 結果を `quality_plan_response` としてStrategistに返信
+
+6. **メッセージは必ず処理**
+   - 読み取ったメッセージは必ず応答
+   - 処理後、ファイルをprocessed/に移動:
+     ```bash
+     mkdir -p workspace/queue/evaluator/processed
+     mv workspace/queue/evaluator/{filename} workspace/queue/evaluator/processed/
+     ```
 
 ## 起動時の初期化
 

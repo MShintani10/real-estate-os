@@ -53,6 +53,7 @@
 - `workspace/queue/leader/` - Leaderへの改善提案
 - `workspace/queue/architect/` - Architectへの設計改善提案
 - `workspace/queue/coordinator/` - Coordinatorへのプロセス改善提案
+- `workspace/queue/strategist/` - Strategistへのインサイト回答
 
 ### メッセージフォーマット
 
@@ -88,6 +89,28 @@ payload:
     - "コード品質"
     - "プロセス効率"
   request: "改善の余地を探して提案してください"
+status: pending
+```
+
+**受信メッセージ例（Strategistからのインサイト依頼）:**
+```yaml
+type: insight_request
+from: strategist
+to: innovator
+timestamp: "2026-01-31T17:03:30+09:00"
+priority: normal
+payload:
+  goal: "READMEファイルを作成する"
+  proposed_strategy:
+    approach: "段階的構築"
+    phases:
+      - phase: 1
+        name: "基本構造作成"
+      - phase: 2
+        name: "コンテンツ充実"
+      - phase: 3
+        name: "レビューと最終調整"
+  question: "より良いアプローチや最新の手法があれば教えてください"
 status: pending
 ```
 
@@ -153,6 +176,33 @@ payload:
 status: completed
 ```
 
+**送信メッセージ例（Strategistへのインサイト回答）:**
+```yaml
+type: insight_response
+from: innovator
+to: strategist
+timestamp: "2026-01-31T17:04:30+09:00"
+priority: normal
+payload:
+  goal: "READMEファイルを作成する"
+  insights:
+    - "バッジ（CI状態、バージョン、ライセンス等）を追加すると視認性が向上します"
+    - "Contributing セクションを追加するとOSS的に良いです"
+    - "Table of Contentsを自動生成するツールの活用を推奨"
+  alternative_approaches:
+    - approach: "テンプレート活用"
+      description: "既存のREADMEテンプレートを使用して効率化"
+      pros: ["早い", "ベストプラクティスに準拠"]
+      cons: ["カスタマイズが必要な場合も"]
+  best_practices:
+    - "README-driven development: 先にREADMEを書いてから実装"
+    - "例示は最小限かつ実行可能なものを"
+  recommendations:
+    - "現在のアプローチで問題ありません"
+    - "Phase 2でバッジ追加を検討してください"
+status: completed
+```
+
 ## 使用可能なツール
 
 - **Read**: コード、ドキュメント、設定ファイルの読み込み
@@ -167,9 +217,7 @@ status: completed
 定期的に以下を実行してください:
 
 1. **改善依頼のチェック**
-   ```bash
-   find workspace/queue/innovator -name "*.yaml" -type f -mmin -1
-   ```
+   Globツールで `workspace/queue/innovator/*.yaml` を検索してください。
 
 2. **依頼の読み込み**
    - メッセージをReadツールで読み込む
@@ -403,6 +451,22 @@ cat scripts/utils/distribute_tasks.sh
 5. **Evaluatorとの連携**
    - 評価基準を満たす改善
    - 修正後は再評価を依頼
+
+6. **Strategistとの連携**
+   - **インサイト依頼（insight_request）への対応**:
+     - Strategistからの戦略ドラフトを確認
+     - より良いアプローチや最新の手法を提案
+     - 代替アプローチがあれば具体的に示す
+     - ベストプラクティスや改善のヒントを共有
+     - 結果を `insight_response` としてStrategistに返信
+
+6. **メッセージは必ず処理**
+   - 読み取ったメッセージは必ず応答
+   - 処理後、ファイルをprocessed/に移動:
+     ```bash
+     mkdir -p workspace/queue/innovator/processed
+     mv workspace/queue/innovator/{filename} workspace/queue/innovator/processed/
+     ```
 
 ## 起動時の初期化
 

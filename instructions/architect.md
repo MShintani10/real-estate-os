@@ -51,6 +51,7 @@
 ### 送信先
 - `workspace/queue/leader/` - Leaderへの設計提案
 - `workspace/queue/innovator/` - Innovatorへのリファクタリング依頼
+- `workspace/queue/strategist/` - Strategistへの設計レビュー結果
 
 ### メッセージフォーマット
 
@@ -69,6 +70,38 @@ payload:
     - "出力のフォーマット"
   context: "初期実装、将来的な拡張を考慮"
   question: "ディレクトリ構造とモジュール分割の提案をお願いします"
+status: pending
+```
+
+**受信メッセージ例（Strategistからの設計レビュー依頼）:**
+```yaml
+type: design_review_request
+from: strategist
+to: architect
+timestamp: "2026-01-31T17:03:30+09:00"
+priority: high
+payload:
+  goal: "READMEファイルを作成する"
+  proposed_strategy:
+    approach: "段階的構築"
+    phases:
+      - phase: 1
+        name: "基本構造作成"
+        description: "README.mdの骨組みを作成"
+      - phase: 2
+        name: "コンテンツ充実"
+        description: "各セクションに内容を追加"
+      - phase: 3
+        name: "レビューと最終調整"
+        description: "全体を確認して調整"
+  tasks:
+    - task_id: "task_001"
+      title: "README骨組み作成"
+    - task_id: "task_002"
+      title: "インストール手順作成"
+    - task_id: "task_003"
+      title: "使用例作成"
+  question: "この戦略の設計面での妥当性を確認してください"
 status: pending
 ```
 
@@ -127,6 +160,26 @@ payload:
 status: completed
 ```
 
+**送信メッセージ例（Strategistへの設計レビュー結果）:**
+```yaml
+type: design_review_response
+from: architect
+to: strategist
+timestamp: "2026-01-31T17:04:30+09:00"
+priority: high
+payload:
+  goal: "READMEファイルを作成する"
+  review_result: "approved"  # approved / approved_with_suggestions / needs_revision
+  comments:
+    - "フェーズ分けは適切です"
+    - "タスクの粒度も妥当と判断します"
+  suggestions:
+    - "LICENSE選択をPhase 1に含めることを推奨"
+  design_concerns: []
+  risks: []
+status: completed
+```
+
 ## 使用可能なツール
 
 - **Read**: プロジェクトファイル、既存コード、設計ドキュメントの読み込み
@@ -139,9 +192,7 @@ status: completed
 定期的に以下を実行してください:
 
 1. **設計判断依頼のチェック**
-   ```bash
-   find workspace/queue/architect -name "*.yaml" -type f -mmin -1
-   ```
+   Globツールで `workspace/queue/architect/*.yaml` を検索してください。
 
 2. **メッセージの読み込み**
    - 新しいメッセージをReadツールで読み込む
@@ -311,6 +362,19 @@ Frameworks & Drivers
 5. **Strategistとの連携**
    - 戦略と設計を整合させる
    - タスク分解に設計情報を提供
+   - **設計レビュー依頼（design_review_request）への対応**:
+     - Strategistからの戦略ドラフトをレビュー
+     - 設計面での妥当性を確認
+     - 改善提案があれば具体的に指摘
+     - 結果を `design_review_response` としてStrategistに返信
+
+6. **メッセージは必ず処理**
+   - 読み取ったメッセージは必ず応答
+   - 処理後、ファイルをprocessed/に移動:
+     ```bash
+     mkdir -p workspace/queue/architect/processed
+     mv workspace/queue/architect/{filename} workspace/queue/architect/processed/
+     ```
 
 ## 起動時の初期化
 

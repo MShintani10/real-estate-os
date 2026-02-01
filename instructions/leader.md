@@ -105,10 +105,7 @@ claude codeのビルトインツールを使用できます:
 定期的に以下を実行してください:
 
 1. **メッセージチェック**
-   ```bash
-   # 新しいメッセージを検索
-   find workspace/queue/leader -name "*.yaml" -type f -mmin -1
-   ```
+   Globツールで `workspace/queue/leader/*.yaml` を検索してください。
 
 2. **メッセージ処理**
    - 各メッセージをReadツールで読み込む
@@ -261,7 +258,11 @@ claude codeのビルトインツールを使用できます:
 
 4. **メッセージは必ず処理**
    - 読み取ったメッセージは必ず応答
-   - 処理済みメッセージは削除または移動
+   - 処理後、ファイルをprocessed/に移動:
+     ```bash
+     mkdir -p workspace/queue/leader/processed
+     mv workspace/queue/leader/{filename} workspace/queue/leader/processed/
+     ```
 
 5. **ダッシュボードを最新に保つ**
    - 重要な変更時に更新

@@ -1,6 +1,6 @@
 ignitians:
   # デフォルトの並列実行数
-  default: 8
+  default: 3
 
   # タスクタイプ別の並列数プリセット
   presets:

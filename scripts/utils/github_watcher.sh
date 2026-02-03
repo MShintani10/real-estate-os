@@ -65,12 +65,18 @@ load_config() {
             continue
         fi
         if [[ "$in_repos" == true ]]; then
-            if [[ "$line" =~ ^[[:space:]]*-[[:space:]]*(.+) ]]; then
+            if [[ "$line" =~ ^[[:space:]]*-[[:space:]]*repo:[[:space:]]*(.+) ]]; then
+                # - repo: owner/repo 形式
                 local repo="${BASH_REMATCH[1]}"
                 repo=$(echo "$repo" | tr -d '"' | tr -d "'" | xargs)
                 REPOSITORIES+=("$repo")
-            elif [[ "$line" =~ ^[[:space:]]*[a-z]+: ]]; then
-                # 新しいセクションが始まったら終了
+            elif [[ "$line" =~ ^[[:space:]]*-[[:space:]]*([^:]+)$ ]]; then
+                # - owner/repo 形式（シンプル形式）
+                local repo="${BASH_REMATCH[1]}"
+                repo=$(echo "$repo" | tr -d '"' | tr -d "'" | xargs)
+                REPOSITORIES+=("$repo")
+            elif [[ "$line" =~ ^[[:space:]]*[a-z_]+:[[:space:]] ]] && [[ ! "$line" =~ ^[[:space:]]*base_branch: ]]; then
+                # 新しいセクションが始まったら終了（base_branchは除く）
                 in_repos=false
             fi
         fi

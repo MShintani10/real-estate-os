@@ -463,9 +463,9 @@ ignitians:
   default: 3    # Default
 
   presets:
-    light: 1   # Light tasks (file operations, etc.)
-    normal: 3   # Normal tasks (implementation, etc.)
-    heavy: 6    # Heavy tasks (analysis, etc.)
+    light: 16   # Light tasks (file operations, etc.)
+    normal: 8   # Normal tasks (implementation, etc.)
+    heavy: 4    # Heavy tasks (analysis, etc.)
 ```
 
 Restart the system after changes:
@@ -733,8 +733,12 @@ For complex tasks, provide context via the `-c` option:
 ### 3. Choose Appropriate Parallelism
 
 - **Light tasks (file operations)**: 16 parallel
-- **Normal tasks (implementation)**: 8 parallel (default)
+- **Normal tasks (implementation)**: 8 parallel
 - **Heavy tasks (analysis)**: 4 parallel
+
+> **Note**: Parallelism is based on "weight per task", not total project complexity. Heavy tasks (complex analysis, etc.) consume more tokens per task, so fewer workers are used to manage resources and control costs. Light tasks complete quickly, so more parallelism improves throughput.
+
+Default parallelism is 3. Presets can be configured in `config/ignitians.yaml`.
 
 ### 4. Regular Progress Checks
 

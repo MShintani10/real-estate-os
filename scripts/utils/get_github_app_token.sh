@@ -107,16 +107,17 @@ load_config() {
 # =============================================================================
 
 generate_token() {
+    local result
     local token
 
     # gh-token 拡張でトークン生成
-    token=$(gh token generate \
+    result=$(gh token generate \
         --app-id "$APP_ID" \
         --installation-id "$INSTALLATION_ID" \
         --key "$PRIVATE_KEY_PATH" \
         2>/dev/null)
 
-    if [[ -z "$token" ]]; then
+    if [[ -z "$result" ]]; then
         error "トークンの生成に失敗しました"
         echo "" >&2
         echo "以下を確認してください:" >&2
@@ -126,8 +127,17 @@ generate_token() {
         exit 1
     fi
 
-    # トークンを出力（stdoutのみ）
-    echo "$token"
+    # JSONからトークン値を抽出（jqがある場合）
+    if command -v jq &> /dev/null; then
+        token=$(echo "$result" | jq -r '.token // empty' 2>/dev/null)
+        if [[ -n "$token" ]]; then
+            echo "$token"
+            return
+        fi
+    fi
+
+    # jqがない場合やJSONでない場合はそのまま出力
+    echo "$result"
 }
 
 # =============================================================================

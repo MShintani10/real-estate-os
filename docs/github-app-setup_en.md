@@ -118,21 +118,27 @@ On your App's settings page:
 
 ### 2. Get Installation ID
 
-After installation, get the Installation ID:
+After installation, get the Installation ID using one of the following methods.
+
+#### Method A: Get from GitHub URL (Recommended)
+
+1. Go to https://github.com/settings/installations
+2. Click "Configure" on the installed App
+3. Check the URL: `https://github.com/settings/installations/12345678`
+4. The `12345678` is your Installation ID
+
+#### Method B: Use gh-token extension
 
 ```bash
-# For user accounts
-gh api /users/{username}/installation | jq '.id'
-
-# For organization accounts
-gh api /orgs/{org}/installation | jq '.id'
+gh token installations \
+  --app-id YOUR_APP_ID \
+  --key ~/.config/ignite/github-app-private-key.pem
 ```
 
-Example:
-```bash
-# Example: installed on user "myfinder"
-gh api /users/myfinder/installation | jq '.id'
-# Output example: 12345678
+Example output:
+```
+ID        Account
+12345678  myfinder
 ```
 
 ## Create Configuration File

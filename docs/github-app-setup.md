@@ -118,21 +118,27 @@ chmod 600 ~/.config/ignite/github-app-private-key.pem
 
 ### 2. Installation ID取得
 
-インストール後、Installation IDを取得します:
+インストール後、Installation IDを取得します。以下のいずれかの方法を使用してください。
+
+#### 方法A: GitHubのURLから取得（推奨）
+
+1. https://github.com/settings/installations にアクセス
+2. インストールしたAppの「Configure」をクリック
+3. URLを確認: `https://github.com/settings/installations/12345678`
+4. この `12345678` がInstallation ID
+
+#### 方法B: gh-token拡張を使用
 
 ```bash
-# ユーザーアカウントの場合
-gh api /users/{username}/installation | jq '.id'
-
-# 組織アカウントの場合
-gh api /orgs/{org}/installation | jq '.id'
+gh token installations \
+  --app-id YOUR_APP_ID \
+  --key ~/.config/ignite/github-app-private-key.pem
 ```
 
-例:
-```bash
-# 例: myfinder というユーザーにインストールした場合
-gh api /users/myfinder/installation | jq '.id'
-# 出力例: 12345678
+出力例:
+```
+ID        Account
+12345678  myfinder
 ```
 
 ## 設定ファイル作成

@@ -95,6 +95,9 @@ load_config() {
     WATCH_PR_COMMENTS=$(grep -E '^\s*pr_comments:' "$config_file" | head -1 | awk '{print $2}' | tr -d '"')
     WATCH_PR_COMMENTS=${WATCH_PR_COMMENTS:-true}
 
+    WATCH_PR_REVIEWS=$(grep -E '^\s*pr_reviews:' "$config_file" | head -1 | awk '{print $2}' | tr -d '"')
+    WATCH_PR_REVIEWS=${WATCH_PR_REVIEWS:-true}
+
     # トリガー設定
     MENTION_PATTERN=$(grep -E '^\s*mention_pattern:' "$config_file" | head -1 | awk '{print $2}' | tr -d '"')
     MENTION_PATTERN=${MENTION_PATTERN:-"@ignite-gh-app"}
@@ -382,6 +385,38 @@ fetch_pr_comments() {
         }' 2>/dev/null || echo ""
 }
 
+# PRレビューを取得（Approve/Request changes/Comment）
+fetch_pr_reviews() {
+    local repo="$1"
+    local since=""
+
+    # 最終チェック時刻があれば使用、なければ初期化時刻を使用
+    since=$(jq -r ".last_check[\"${repo}_pr_reviews\"] // .initialized_at // empty" "$STATE_FILE")
+    since=${since:-"1970-01-01T00:00:00Z"}
+    # GitHub APIはUTC形式を要求するので変換
+    since=$(to_utc "$since")
+
+    # オープンなPRを取得してレビューをチェック
+    local open_prs=$(gh api "/repos/${repo}/pulls?state=open&per_page=30" --jq '.[].number' 2>/dev/null || echo "")
+
+    [[ -z "$open_prs" ]] && return
+
+    for pr_number in $open_prs; do
+        local reviews_json=$(gh api "/repos/${repo}/pulls/${pr_number}/reviews" 2>/dev/null || echo "[]")
+        jq -c --arg since "$since" --arg pr_number "$pr_number" \
+            '.[] | select(.submitted_at >= $since and .body != null and .body != "") | {
+                id: .id,
+                pr_number: ($pr_number | tonumber),
+                body: .body,
+                author: .user.login,
+                author_type: .user.type,
+                state: .state,
+                submitted_at: .submitted_at,
+                url: .html_url
+            }' <(printf '%s' "$reviews_json") 2>/dev/null || true
+    done
+}
+
 # =============================================================================
 # メッセージ生成
 # =============================================================================
@@ -516,6 +551,36 @@ $(echo "$body" | sed 's/^/    /')
 status: pending
 EOF
             ;;
+
+        pr_review)
+            local pr_number=$(echo "$event_data" | jq -r '.pr_number')
+            local review_id=$(echo "$event_data" | jq -r '.id')
+            local body=$(echo "$event_data" | jq -r '.body // ""' | head -c 1000)
+            local author=$(echo "$event_data" | jq -r '.author')
+            local author_type=$(echo "$event_data" | jq -r '.author_type')
+            local review_state=$(echo "$event_data" | jq -r '.state')
+            local url=$(echo "$event_data" | jq -r '.url')
+
+            cat > "$message_file" <<EOF
+type: github_event
+from: github_watcher
+to: leader
+timestamp: "${timestamp}"
+priority: normal
+payload:
+  event_type: ${event_type}
+  repository: ${repo}
+  pr_number: ${pr_number}
+  review_id: ${review_id}
+  review_state: ${review_state}
+  author: ${author}
+  author_type: ${author_type}
+  body: |
+$(echo "$body" | sed 's/^/    /')
+  url: "${url}"
+status: pending
+EOF
+            ;;
     esac
 
     echo "$message_file"
@@ -536,18 +601,22 @@ create_task_message() {
 
     local message_file="${queue_dir}/github_task_${message_id}.yaml"
 
-    local issue_number=$(echo "$event_data" | jq -r '.issue_number // .number // 0')
+    local issue_number=$(echo "$event_data" | jq -r '.issue_number // .pr_number // .number // 0')
     local author=$(echo "$event_data" | jq -r '.author')
     local body=$(echo "$event_data" | jq -r '.body // ""' | head -c 2000)
     local url=$(echo "$event_data" | jq -r '.url')
 
-    # Issue情報を取得（コメントからの場合）
+    # Issue/PR情報を取得（コメント/レビューからの場合）
     local issue_title=""
     local issue_body=""
     if [[ "$event_type" == "issue_comment" ]] && [[ "$issue_number" != "0" ]]; then
         local issue_info=$(gh api "/repos/${repo}/issues/${issue_number}" 2>/dev/null || echo "{}")
         issue_title=$(echo "$issue_info" | jq -r '.title // ""')
         issue_body=$(echo "$issue_info" | jq -r '.body // ""' | head -c 1000)
+    elif [[ "$event_type" =~ ^pr_(comment|review)$ ]] && [[ "$issue_number" != "0" ]]; then
+        local pr_info=$(gh api "/repos/${repo}/pulls/${issue_number}" 2>/dev/null || echo "{}")
+        issue_title=$(echo "$pr_info" | jq -r '.title // ""')
+        issue_body=$(echo "$pr_info" | jq -r '.body // ""' | head -c 1000)
     else
         issue_title=$(echo "$event_data" | jq -r '.title // ""')
         issue_body=$(echo "$event_data" | jq -r '.body // ""' | head -c 1000)
@@ -603,6 +672,11 @@ process_events() {
         # PR Comments
         if [[ "$WATCH_PR_COMMENTS" == "true" ]]; then
             process_pr_comments "$repo"
+        fi
+
+        # PR Reviews
+        if [[ "$WATCH_PR_REVIEWS" == "true" ]]; then
+            process_pr_reviews "$repo"
         fi
     done
 }
@@ -853,6 +927,74 @@ process_pr_comments() {
     done
 
     update_last_check "$repo" "pr_comments"
+}
+
+process_pr_reviews() {
+    local repo="$1"
+    local reviews=$(fetch_pr_reviews "$repo")
+
+    if [[ -z "$reviews" ]]; then
+        return
+    fi
+
+    echo "$reviews" | while IFS= read -r review; do
+        [[ -z "$review" ]] && continue
+
+        local id=$(echo "$review" | jq -r '.id')
+        local author_type=$(echo "$review" | jq -r '.author_type')
+        local author=$(echo "$review" | jq -r '.author')
+        local body=$(echo "$review" | jq -r '.body // ""')
+
+        # 処理済みチェック
+        if is_event_processed "pr_review" "$id"; then
+            continue
+        fi
+
+        # Bot判別
+        if [[ "$IGNORE_BOT" == "true" ]] && ! is_human_event "$author_type" "$author"; then
+            mark_event_processed "pr_review" "$id"
+            continue
+        fi
+
+        log_event "新規PRレビュー検知: #$(echo "$review" | jq -r '.pr_number') by $author"
+
+        # トリガーパターンをチェック
+        if [[ "$body" =~ $MENTION_PATTERN ]]; then
+            log_event "トリガー検知: $MENTION_PATTERN (by $author)"
+
+            # アクセス制御チェック
+            if ! is_user_authorized "$author"; then
+                log_warn "アクセス拒否: ユーザー '$author' はallowed_usersに含まれていません"
+                mark_event_processed "pr_review" "$id"
+                continue
+            fi
+
+            # トリガータイプを判別
+            local trigger_type="review"
+            if [[ "$body" =~ (実装|implement) ]]; then
+                trigger_type="implement"
+            elif [[ "$body" =~ (説明|explain) ]]; then
+                trigger_type="explain"
+            fi
+
+            local message_file=$(create_task_message "pr_review" "$repo" "$review" "$trigger_type")
+            log_success "タスクメッセージ作成: $message_file"
+        else
+            # アクセス制御チェック（トリガーなしPRレビュー）
+            if ! is_user_authorized "$author"; then
+                log_info "アクセス制御: ユーザー '$author' のPRレビューをスキップ"
+                mark_event_processed "pr_review" "$id"
+                continue
+            fi
+
+            local message_file=$(create_event_message "pr_review" "$repo" "$review")
+            log_success "メッセージ作成: $message_file"
+        fi
+
+        mark_event_processed "pr_review" "$id"
+    done
+
+    update_last_check "$repo" "pr_reviews"
 }
 
 # =============================================================================

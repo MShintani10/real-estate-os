@@ -247,7 +247,8 @@ force_push() {
 
     cd "$repo_path"
 
-    local current_branch=$(git branch --show-current)
+    local current_branch
+    current_branch=$(git branch --show-current)
     log_info "ブランチ $current_branch を force push 中..."
 
     git push --force-with-lease

@@ -160,7 +160,8 @@ get_base_branch() {
 repo_to_path() {
     local repo="$1"
     # owner/repo → owner_repo
-    local repo_name=$(echo "$repo" | tr '/' '_')
+    local repo_name
+    repo_name=$(echo "$repo" | tr '/' '_')
     if [[ -n "${IGNITE_WORKER_ID:-}" ]]; then
         echo "$REPOS_DIR/${repo_name}_ignitian_${IGNITE_WORKER_ID}"
     else
@@ -182,7 +183,8 @@ setup_repo() {
         branch=$(get_base_branch "$repo")
     fi
 
-    local repo_path=$(repo_to_path "$repo")
+    local repo_path
+    repo_path=$(repo_to_path "$repo")
 
     mkdir -p "$REPOS_DIR"
 

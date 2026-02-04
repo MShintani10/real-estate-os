@@ -187,7 +187,8 @@ init_state() {
     if [[ ! -f "$STATE_FILE" ]]; then
         # 新規作成時は現在時刻を記録
         # これ以降のイベントのみ処理対象とする（過去イベントの再処理防止）
-        local now=$(date -Iseconds)
+        local now
+        now=$(date -Iseconds)
         echo "{\"processed_events\":{},\"last_check\":{},\"initialized_at\":\"$now\"}" > "$STATE_FILE"
         log_info "新規ステートファイル作成: $now 以降のイベントを監視"
     fi
@@ -240,9 +241,11 @@ mark_event_processed() {
     local event_type="$1"
     local event_id="$2"
     local key="${event_type}_${event_id}"
-    local timestamp=$(date -Iseconds)
+    local timestamp
+    timestamp=$(date -Iseconds)
 
-    local tmp_file=$(mktemp)
+    local tmp_file
+    tmp_file=$(mktemp)
     jq ".processed_events[\"$key\"] = \"$timestamp\"" "$STATE_FILE" > "$tmp_file"
     mv "$tmp_file" "$STATE_FILE"
 }
@@ -251,21 +254,25 @@ mark_event_processed() {
 update_last_check() {
     local repo="$1"
     local event_type="$2"
-    local timestamp=$(date -Iseconds)
+    local timestamp
+    timestamp=$(date -Iseconds)
 
-    local tmp_file=$(mktemp)
+    local tmp_file
+    tmp_file=$(mktemp)
     jq ".last_check[\"${repo}_${event_type}\"] = \"$timestamp\"" "$STATE_FILE" > "$tmp_file"
     mv "$tmp_file" "$STATE_FILE"
 }
 
 # 古い処理済みイベントをクリーンアップ（24時間以上前）
 cleanup_old_events() {
-    local cutoff=$(date -d "24 hours ago" -Iseconds 2>/dev/null || date -v-24H -Iseconds 2>/dev/null || echo "")
+    local cutoff
+    cutoff=$(date -d "24 hours ago" -Iseconds 2>/dev/null || date -v-24H -Iseconds 2>/dev/null || echo "")
     if [[ -z "$cutoff" ]]; then
         return
     fi
 
-    local tmp_file=$(mktemp)
+    local tmp_file
+    tmp_file=$(mktemp)
     jq --arg cutoff "$cutoff" '
         .processed_events |= with_entries(select(.value >= $cutoff))
     ' "$STATE_FILE" > "$tmp_file" 2>/dev/null && mv "$tmp_file" "$STATE_FILE"
@@ -303,10 +310,12 @@ is_user_authorized() {
     fi
 
     # ユーザー名を小文字で比較（GitHubは大文字小文字を区別しない）
-    local username_lower=$(echo "$username" | tr '[:upper:]' '[:lower:]')
+    local username_lower
+    username_lower=$(echo "$username" | tr '[:upper:]' '[:lower:]')
 
     for user in "${ALLOWED_USERS[@]}"; do
-        local user_lower=$(echo "$user" | tr '[:upper:]' '[:lower:]')
+        local user_lower
+        user_lower=$(echo "$user" | tr '[:upper:]' '[:lower:]')
         if [[ "$user_lower" == "$username_lower" ]]; then
             return 0
         fi
@@ -471,12 +480,14 @@ fetch_pr_reviews() {
     since=$(to_utc "$since")
 
     # オープンなPRを取得してレビューをチェック
-    local open_prs=$(gh api "/repos/${repo}/pulls?state=open&per_page=30" --jq '.[].number' 2>/dev/null || echo "")
+    local open_prs
+    open_prs=$(gh api "/repos/${repo}/pulls?state=open&per_page=30" --jq '.[].number' 2>/dev/null || echo "")
 
     [[ -z "$open_prs" ]] && return
 
     for pr_number in $open_prs; do
-        local reviews_json=$(gh api "/repos/${repo}/pulls/${pr_number}/reviews" 2>/dev/null || echo "[]")
+        local reviews_json
+        reviews_json=$(gh api "/repos/${repo}/pulls/${pr_number}/reviews" 2>/dev/null || echo "[]")
         # bodyが空でも取得（コード行コメントのみのレビューも検知するため）
         jq -c --arg since "$since" --arg pr_number "$pr_number" \
             '.[] | select(.submitted_at >= $since) | {
@@ -511,8 +522,10 @@ create_event_message() {
     local repo="$2"
     local event_data="$3"
 
-    local timestamp=$(date -Iseconds)
-    local message_id=$(date +%s%6N)
+    local timestamp
+    timestamp=$(date -Iseconds)
+    local message_id
+    message_id=$(date +%s%6N)
     local queue_dir="${WORKSPACE_DIR}/queue/leader"
 
     mkdir -p "$queue_dir"
@@ -522,12 +535,13 @@ create_event_message() {
     # イベントタイプに応じてメッセージを構築
     case "$event_type" in
         issue_created|issue_updated)
-            local issue_number=$(echo "$event_data" | jq -r '.number')
-            local issue_title=$(echo "$event_data" | jq -r '.title')
-            local issue_body=$(echo "$event_data" | jq -r '.body // ""' | head -c 1000)
-            local author=$(echo "$event_data" | jq -r '.author')
-            local author_type=$(echo "$event_data" | jq -r '.author_type')
-            local url=$(echo "$event_data" | jq -r '.url')
+            local issue_number issue_title issue_body author author_type url
+            issue_number=$(echo "$event_data" | jq -r '.number')
+            issue_title=$(echo "$event_data" | jq -r '.title')
+            issue_body=$(echo "$event_data" | jq -r '.body // ""' | head -c 1000)
+            author=$(echo "$event_data" | jq -r '.author')
+            author_type=$(echo "$event_data" | jq -r '.author_type')
+            url=$(echo "$event_data" | jq -r '.url')
 
             cat > "$message_file" <<EOF
 type: github_event
@@ -549,12 +563,13 @@ EOF
             ;;
 
         issue_comment)
-            local issue_number=$(echo "$event_data" | jq -r '.issue_number')
-            local comment_id=$(echo "$event_data" | jq -r '.id')
-            local body=$(echo "$event_data" | jq -r '.body // ""' | head -c 1000)
-            local author=$(echo "$event_data" | jq -r '.author')
-            local author_type=$(echo "$event_data" | jq -r '.author_type')
-            local url=$(echo "$event_data" | jq -r '.url')
+            local issue_number comment_id body author author_type url
+            issue_number=$(echo "$event_data" | jq -r '.issue_number')
+            comment_id=$(echo "$event_data" | jq -r '.id')
+            body=$(echo "$event_data" | jq -r '.body // ""' | head -c 1000)
+            author=$(echo "$event_data" | jq -r '.author')
+            author_type=$(echo "$event_data" | jq -r '.author_type')
+            url=$(echo "$event_data" | jq -r '.url')
 
             cat > "$message_file" <<EOF
 type: github_event
@@ -576,14 +591,15 @@ EOF
             ;;
 
         pr_created|pr_updated)
-            local pr_number=$(echo "$event_data" | jq -r '.number')
-            local pr_title=$(echo "$event_data" | jq -r '.title')
-            local pr_body=$(echo "$event_data" | jq -r '.body // ""' | head -c 1000)
-            local author=$(echo "$event_data" | jq -r '.author')
-            local author_type=$(echo "$event_data" | jq -r '.author_type')
-            local url=$(echo "$event_data" | jq -r '.url')
-            local head_ref=$(echo "$event_data" | jq -r '.head_ref')
-            local base_ref=$(echo "$event_data" | jq -r '.base_ref')
+            local pr_number pr_title pr_body author author_type url head_ref base_ref
+            pr_number=$(echo "$event_data" | jq -r '.number')
+            pr_title=$(echo "$event_data" | jq -r '.title')
+            pr_body=$(echo "$event_data" | jq -r '.body // ""' | head -c 1000)
+            author=$(echo "$event_data" | jq -r '.author')
+            author_type=$(echo "$event_data" | jq -r '.author_type')
+            url=$(echo "$event_data" | jq -r '.url')
+            head_ref=$(echo "$event_data" | jq -r '.head_ref')
+            base_ref=$(echo "$event_data" | jq -r '.base_ref')
 
             cat > "$message_file" <<EOF
 type: github_event
@@ -607,12 +623,13 @@ EOF
             ;;
 
         pr_comment)
-            local pr_number=$(echo "$event_data" | jq -r '.pr_number')
-            local comment_id=$(echo "$event_data" | jq -r '.id')
-            local body=$(echo "$event_data" | jq -r '.body // ""' | head -c 1000)
-            local author=$(echo "$event_data" | jq -r '.author')
-            local author_type=$(echo "$event_data" | jq -r '.author_type')
-            local url=$(echo "$event_data" | jq -r '.url')
+            local pr_number comment_id body author author_type url
+            pr_number=$(echo "$event_data" | jq -r '.pr_number')
+            comment_id=$(echo "$event_data" | jq -r '.id')
+            body=$(echo "$event_data" | jq -r '.body // ""' | head -c 1000)
+            author=$(echo "$event_data" | jq -r '.author')
+            author_type=$(echo "$event_data" | jq -r '.author_type')
+            url=$(echo "$event_data" | jq -r '.url')
 
             cat > "$message_file" <<EOF
 type: github_event
@@ -634,13 +651,14 @@ EOF
             ;;
 
         pr_review)
-            local pr_number=$(echo "$event_data" | jq -r '.pr_number')
-            local review_id=$(echo "$event_data" | jq -r '.id')
-            local body=$(echo "$event_data" | jq -r '.body // ""' | head -c 1000)
-            local author=$(echo "$event_data" | jq -r '.author')
-            local author_type=$(echo "$event_data" | jq -r '.author_type')
-            local review_state=$(echo "$event_data" | jq -r '.state')
-            local url=$(echo "$event_data" | jq -r '.url')
+            local pr_number review_id body author author_type review_state url
+            pr_number=$(echo "$event_data" | jq -r '.pr_number')
+            review_id=$(echo "$event_data" | jq -r '.id')
+            body=$(echo "$event_data" | jq -r '.body // ""' | head -c 1000)
+            author=$(echo "$event_data" | jq -r '.author')
+            author_type=$(echo "$event_data" | jq -r '.author_type')
+            review_state=$(echo "$event_data" | jq -r '.state')
+            url=$(echo "$event_data" | jq -r '.url')
 
             cat > "$message_file" <<EOF
 type: github_event
@@ -673,28 +691,32 @@ create_task_message() {
     local event_data="$3"
     local trigger_type="$4"
 
-    local timestamp=$(date -Iseconds)
-    local message_id=$(date +%s%6N)
+    local timestamp message_id
+    timestamp=$(date -Iseconds)
+    message_id=$(date +%s%6N)
     local queue_dir="${WORKSPACE_DIR}/queue/leader"
 
     mkdir -p "$queue_dir"
 
     local message_file="${queue_dir}/github_task_${message_id}.yaml"
 
-    local issue_number=$(echo "$event_data" | jq -r '.issue_number // .pr_number // .number // 0')
-    local author=$(echo "$event_data" | jq -r '.author')
-    local body=$(echo "$event_data" | jq -r '.body // ""' | head -c 2000)
-    local url=$(echo "$event_data" | jq -r '.url')
+    local issue_number author body url
+    issue_number=$(echo "$event_data" | jq -r '.issue_number // .pr_number // .number // 0')
+    author=$(echo "$event_data" | jq -r '.author')
+    body=$(echo "$event_data" | jq -r '.body // ""' | head -c 2000)
+    url=$(echo "$event_data" | jq -r '.url')
 
     # Issue/PR情報を取得（コメント/レビューからの場合）
     local issue_title=""
     local issue_body=""
     if [[ "$event_type" == "issue_comment" ]] && [[ "$issue_number" != "0" ]]; then
-        local issue_info=$(gh api "/repos/${repo}/issues/${issue_number}" 2>/dev/null || echo "{}")
+        local issue_info
+        issue_info=$(gh api "/repos/${repo}/issues/${issue_number}" 2>/dev/null || echo "{}")
         issue_title=$(echo "$issue_info" | jq -r '.title // ""')
         issue_body=$(echo "$issue_info" | jq -r '.body // ""' | head -c 1000)
     elif [[ "$event_type" =~ ^pr_(comment|review)$ ]] && [[ "$issue_number" != "0" ]]; then
-        local pr_info=$(gh api "/repos/${repo}/pulls/${issue_number}" 2>/dev/null || echo "{}")
+        local pr_info
+        pr_info=$(gh api "/repos/${repo}/pulls/${issue_number}" 2>/dev/null || echo "{}")
         issue_title=$(echo "$pr_info" | jq -r '.title // ""')
         issue_body=$(echo "$pr_info" | jq -r '.body // ""' | head -c 1000)
     else

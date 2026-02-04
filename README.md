@@ -82,9 +82,16 @@ cd /path/to/ignite
 
 # GitHub Watcherも一緒に起動
 ./scripts/ignite start --with-watcher
+
+# Leaderオンリーモード（単独モード）で起動
+./scripts/ignite start -a leader
+# または
+./scripts/ignite start --agents leader
 ```
 
 `-s`/`--session` と `-w`/`--workspace` オプションを使用することで、複数のプロジェクトを並行して実行できます。詳細は「複数プロジェクトの並行実行」セクションを参照してください。
+
+`-a`/`--agents` オプションで `leader` を指定すると、Leaderのみで動作する単独モードで起動します。詳細は「Leaderオンリーモード」セクションを参照してください。
 
 ### 2. タスクを投入
 
@@ -421,6 +428,42 @@ ignite/
 - 各セッションは独立したワークスペースを持つ必要があります
 - セッションIDを指定しない場合、デフォルトの `ignite-session` が使用されます
 - ワークスペースを指定しない場合、デフォルトの `workspace/` ディレクトリが使用されます
+
+### Leaderオンリーモード（単独モード）
+
+Sub-LeadersやIGNITIANSを起動せず、LeaderのみでタスクをSystem処理する軽量モードです。
+
+```bash
+# Leaderオンリーモードで起動
+./scripts/ignite start -a leader
+# または
+./scripts/ignite start --agents leader
+```
+
+**ユースケース:**
+
+| シナリオ | 説明 |
+|---------|------|
+| **コスト削減** | Sub-LeadersやIGNITIANsを起動しないため、トークン消費を大幅に削減 |
+| **単純タスク処理** | 簡単なタスク（ファイル編集、軽微な修正など）にはLeader一人で十分 |
+| **迅速な対応** | 複雑な協調プロセスをスキップして素早く処理 |
+| **デバッグ・テスト** | システムの動作確認やテスト時に最小構成で実行 |
+
+**動作の違い:**
+
+| 項目 | 通常モード | Leaderオンリーモード |
+|------|-----------|---------------------|
+| 起動エージェント | Leader + 5 Sub-Leaders + IGNITIANs | Leaderのみ |
+| 戦略立案 | Strategistが担当 | Leaderが直接実行 |
+| 設計判断 | Architectが担当 | Leaderが直接実行 |
+| タスク実行 | IGNITIANsが並列実行 | Leaderが直接実行 |
+| 品質評価 | Evaluatorが担当 | Leaderが直接確認 |
+| tmuxペイン数 | 6+（Sub-Leaders + IGNITIANs） | 1（Leaderのみ） |
+
+**注意事項:**
+- 複雑なタスクや大規模な変更には通常モード（協調モード）を推奨します
+- 単独モードではLeaderのログに `[SOLO]` タグが追加されます
+- 設定は `workspace/system_config.yaml` の `system.agent_mode` で管理されます
 
 ### タスクの種類別の使用例
 

@@ -784,7 +784,8 @@ process_events() {
 
 process_issues() {
     local repo="$1"
-    local issues=$(fetch_issues "$repo")
+    local issues
+    issues=$(fetch_issues "$repo")
 
     if [[ -z "$issues" ]]; then
         return
@@ -793,9 +794,12 @@ process_issues() {
     echo "$issues" | while IFS= read -r issue; do
         [[ -z "$issue" ]] && continue
 
-        local id=$(echo "$issue" | jq -r '.id')
-        local author_type=$(echo "$issue" | jq -r '.author_type')
-        local author=$(echo "$issue" | jq -r '.author')
+        local id
+        id=$(echo "$issue" | jq -r '.id')
+        local author_type
+        author_type=$(echo "$issue" | jq -r '.author_type')
+        local author
+        author=$(echo "$issue" | jq -r '.author')
 
         # 処理済みチェック
         if is_event_processed "issue" "$id"; then
@@ -817,7 +821,8 @@ process_issues() {
 
         log_event "新規Issue検知: #$(echo "$issue" | jq -r '.number') by $author"
 
-        local message_file=$(create_event_message "issue_created" "$repo" "$issue")
+        local message_file
+        message_file=$(create_event_message "issue_created" "$repo" "$issue")
         log_success "メッセージ作成: $message_file"
 
         mark_event_processed "issue" "$id"
@@ -828,7 +833,8 @@ process_issues() {
 
 process_issue_comments() {
     local repo="$1"
-    local comments=$(fetch_issue_comments "$repo")
+    local comments
+    comments=$(fetch_issue_comments "$repo")
 
     if [[ -z "$comments" ]]; then
         return
@@ -837,10 +843,14 @@ process_issue_comments() {
     echo "$comments" | while IFS= read -r comment; do
         [[ -z "$comment" ]] && continue
 
-        local id=$(echo "$comment" | jq -r '.id')
-        local author_type=$(echo "$comment" | jq -r '.author_type')
-        local author=$(echo "$comment" | jq -r '.author')
-        local body=$(echo "$comment" | jq -r '.body // ""')
+        local id
+        id=$(echo "$comment" | jq -r '.id')
+        local author_type
+        author_type=$(echo "$comment" | jq -r '.author_type')
+        local author
+        author=$(echo "$comment" | jq -r '.author')
+        local body
+        body=$(echo "$comment" | jq -r '.body // ""')
 
         # 処理済みチェック
         if is_event_processed "issue_comment" "$id"; then
@@ -874,7 +884,8 @@ process_issue_comments() {
                 trigger_type="explain"
             fi
 
-            local message_file=$(create_task_message "issue_comment" "$repo" "$comment" "$trigger_type")
+            local message_file
+            message_file=$(create_task_message "issue_comment" "$repo" "$comment" "$trigger_type")
             log_success "タスクメッセージ作成: $message_file"
         else
             # アクセス制御チェック（トリガーなしコメント）
@@ -884,7 +895,8 @@ process_issue_comments() {
                 continue
             fi
 
-            local message_file=$(create_event_message "issue_comment" "$repo" "$comment")
+            local message_file
+            message_file=$(create_event_message "issue_comment" "$repo" "$comment")
             log_success "メッセージ作成: $message_file"
         fi
 
@@ -896,7 +908,8 @@ process_issue_comments() {
 
 process_prs() {
     local repo="$1"
-    local prs=$(fetch_prs "$repo")
+    local prs
+    prs=$(fetch_prs "$repo")
 
     if [[ -z "$prs" ]]; then
         return
@@ -905,10 +918,14 @@ process_prs() {
     echo "$prs" | while IFS= read -r pr; do
         [[ -z "$pr" ]] && continue
 
-        local id=$(echo "$pr" | jq -r '.id')
-        local author_type=$(echo "$pr" | jq -r '.author_type')
-        local author=$(echo "$pr" | jq -r '.author')
-        local body=$(echo "$pr" | jq -r '.body // ""')
+        local id
+        id=$(echo "$pr" | jq -r '.id')
+        local author_type
+        author_type=$(echo "$pr" | jq -r '.author_type')
+        local author
+        author=$(echo "$pr" | jq -r '.author')
+        local body
+        body=$(echo "$pr" | jq -r '.body // ""')
 
         # 処理済みチェック
         if is_event_processed "pr" "$id"; then
@@ -942,7 +959,8 @@ process_prs() {
                 trigger_type="explain"
             fi
 
-            local message_file=$(create_task_message "pr_created" "$repo" "$pr" "$trigger_type")
+            local message_file
+            message_file=$(create_task_message "pr_created" "$repo" "$pr" "$trigger_type")
             log_success "タスクメッセージ作成: $message_file"
         else
             # アクセス制御チェック（トリガーなしPR）
@@ -952,7 +970,8 @@ process_prs() {
                 continue
             fi
 
-            local message_file=$(create_event_message "pr_created" "$repo" "$pr")
+            local message_file
+            message_file=$(create_event_message "pr_created" "$repo" "$pr")
             log_success "メッセージ作成: $message_file"
         fi
 
@@ -964,7 +983,8 @@ process_prs() {
 
 process_pr_comments() {
     local repo="$1"
-    local comments=$(fetch_pr_comments "$repo")
+    local comments
+    comments=$(fetch_pr_comments "$repo")
 
     if [[ -z "$comments" ]]; then
         return
@@ -973,10 +993,14 @@ process_pr_comments() {
     echo "$comments" | while IFS= read -r comment; do
         [[ -z "$comment" ]] && continue
 
-        local id=$(echo "$comment" | jq -r '.id')
-        local author_type=$(echo "$comment" | jq -r '.author_type')
-        local author=$(echo "$comment" | jq -r '.author')
-        local body=$(echo "$comment" | jq -r '.body // ""')
+        local id
+        id=$(echo "$comment" | jq -r '.id')
+        local author_type
+        author_type=$(echo "$comment" | jq -r '.author_type')
+        local author
+        author=$(echo "$comment" | jq -r '.author')
+        local body
+        body=$(echo "$comment" | jq -r '.body // ""')
 
         # 処理済みチェック
         if is_event_processed "pr_comment" "$id"; then
@@ -1010,7 +1034,8 @@ process_pr_comments() {
                 trigger_type="explain"
             fi
 
-            local message_file=$(create_task_message "pr_comment" "$repo" "$comment" "$trigger_type")
+            local message_file
+            message_file=$(create_task_message "pr_comment" "$repo" "$comment" "$trigger_type")
             log_success "タスクメッセージ作成: $message_file"
         else
             # アクセス制御チェック（トリガーなしPRコメント）
@@ -1020,7 +1045,8 @@ process_pr_comments() {
                 continue
             fi
 
-            local message_file=$(create_event_message "pr_comment" "$repo" "$comment")
+            local message_file
+            message_file=$(create_event_message "pr_comment" "$repo" "$comment")
             log_success "メッセージ作成: $message_file"
         fi
 
@@ -1032,7 +1058,8 @@ process_pr_comments() {
 
 process_pr_reviews() {
     local repo="$1"
-    local reviews=$(fetch_pr_reviews "$repo")
+    local reviews
+    reviews=$(fetch_pr_reviews "$repo")
 
     if [[ -z "$reviews" ]]; then
         return
@@ -1041,11 +1068,16 @@ process_pr_reviews() {
     echo "$reviews" | while IFS= read -r review; do
         [[ -z "$review" ]] && continue
 
-        local id=$(echo "$review" | jq -r '.id')
-        local pr_number=$(echo "$review" | jq -r '.pr_number')
-        local author_type=$(echo "$review" | jq -r '.author_type')
-        local author=$(echo "$review" | jq -r '.author')
-        local body=$(echo "$review" | jq -r '.body // ""')
+        local id
+        id=$(echo "$review" | jq -r '.id')
+        local pr_number
+        pr_number=$(echo "$review" | jq -r '.pr_number')
+        local author_type
+        author_type=$(echo "$review" | jq -r '.author_type')
+        local author
+        author=$(echo "$review" | jq -r '.author')
+        local body
+        body=$(echo "$review" | jq -r '.body // ""')
 
         # 処理済みチェック
         if is_event_processed "pr_review" "$id"; then
@@ -1092,7 +1124,8 @@ process_pr_reviews() {
                 review=$(echo "$review" | jq --arg comments "$review_comments" '. + {review_comments: $comments}')
             fi
 
-            local message_file=$(create_task_message "pr_review" "$repo" "$review" "$trigger_type")
+            local message_file
+            message_file=$(create_task_message "pr_review" "$repo" "$review" "$trigger_type")
             log_success "タスクメッセージ作成: $message_file"
         else
             # トリガーなしの場合
@@ -1110,7 +1143,8 @@ process_pr_reviews() {
                 continue
             fi
 
-            local message_file=$(create_event_message "pr_review" "$repo" "$review")
+            local message_file
+            message_file=$(create_event_message "pr_review" "$repo" "$review")
             log_success "メッセージ作成: $message_file"
         fi
 

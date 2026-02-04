@@ -119,10 +119,12 @@ process_message() {
     local queue_name="$2"
 
     # ファイル名から情報を取得
-    local filename=$(basename "$file")
+    local filename
+    filename=$(basename "$file")
 
     # YAMLからタイプを読み取り
-    local msg_type=$(grep -E '^type:' "$file" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
+    local msg_type
+    msg_type=$(grep -E '^type:' "$file" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
 
     log_info "新規メッセージ検知: $filename (type: $msg_type)"
 
@@ -130,13 +132,17 @@ process_message() {
     local instruction=""
     case "$msg_type" in
         github_task)
-            local trigger=$(grep -E '^\s*trigger:' "$file" | head -1 | awk '{print $2}' | tr -d '"')
-            local repo=$(grep -E '^\s*repository:' "$file" | head -1 | awk '{print $2}' | tr -d '"')
-            local issue_num=$(grep -E '^\s*issue_number:' "$file" | head -1 | awk '{print $2}' | tr -d '"')
+            local trigger
+            trigger=$(grep -E '^\s*trigger:' "$file" | head -1 | awk '{print $2}' | tr -d '"')
+            local repo
+            repo=$(grep -E '^\s*repository:' "$file" | head -1 | awk '{print $2}' | tr -d '"')
+            local issue_num
+            issue_num=$(grep -E '^\s*issue_number:' "$file" | head -1 | awk '{print $2}' | tr -d '"')
             instruction="新しいGitHubタスクが来ました。$file を読んで処理してください。リポジトリ: $repo, Issue/PR: #$issue_num, トリガー: $trigger"
             ;;
         github_event)
-            local event_type=$(grep -E '^\s*event_type:' "$file" | head -1 | awk '{print $2}' | tr -d '"')
+            local event_type
+            event_type=$(grep -E '^\s*event_type:' "$file" | head -1 | awk '{print $2}' | tr -d '"')
             instruction="新しいGitHubイベントが来ました。$file を読んで必要に応じて対応してください。イベントタイプ: $event_type"
             ;;
         task)

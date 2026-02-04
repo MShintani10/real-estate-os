@@ -10,10 +10,27 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# =============================================================================
+# XDG パス解決（インストールモード vs 開発モード）
+# =============================================================================
+
+XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+
+# インストールモード判定: ~/.config/ignite/.install_paths が存在するか
+if [[ -z "${IGNITE_CONFIG_DIR:-}" ]]; then
+    if [[ -f "$XDG_CONFIG_HOME/ignite/.install_paths" ]]; then
+        # インストールモード: XDGパスを使用
+        IGNITE_CONFIG_DIR="$XDG_CONFIG_HOME/ignite"
+    else
+        # 開発モード: PROJECT_ROOTを使用
+        IGNITE_CONFIG_DIR="$PROJECT_ROOT/config"
+    fi
+fi
+
 # デフォルト設定
 DEFAULT_INTERVAL=60
 DEFAULT_STATE_FILE="workspace/state/github_watcher_state.json"
-DEFAULT_CONFIG_FILE="config/github-watcher.yaml"
+DEFAULT_CONFIG_FILE="github-watcher.yaml"
 
 # カラー定義
 GREEN='\033[0;32m'
@@ -35,7 +52,7 @@ log_event() { echo -e "[$(date '+%Y-%m-%d %H:%M:%S')] ${CYAN}[EVENT]${NC} $1"; }
 # =============================================================================
 
 load_config() {
-    local config_file="${IGNITE_WATCHER_CONFIG:-${PROJECT_ROOT}/${DEFAULT_CONFIG_FILE}}"
+    local config_file="${IGNITE_WATCHER_CONFIG:-${IGNITE_CONFIG_DIR}/${DEFAULT_CONFIG_FILE}}"
 
     if [[ ! -f "$config_file" ]]; then
         log_error "設定ファイルが見つかりません: $config_file"

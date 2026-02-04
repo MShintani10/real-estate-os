@@ -125,6 +125,23 @@ get_initialized_at() {
     jq -r '.initialized_at // empty' "$STATE_FILE" 2>/dev/null
 }
 
+# ローカル時刻をUTC形式に変換（GitHub APIはUTC形式を要求）
+to_utc() {
+    local timestamp="$1"
+    if [[ -z "$timestamp" ]]; then
+        echo ""
+        return
+    fi
+    # date コマンドでUTC変換（GNU date と BSD date の両方に対応）
+    if date --version &>/dev/null; then
+        # GNU date
+        date -u -d "$timestamp" -Iseconds 2>/dev/null | sed 's/+00:00$/Z/'
+    else
+        # BSD date (macOS)
+        date -u -j -f "%Y-%m-%dT%H:%M:%S%z" "$timestamp" "+%Y-%m-%dT%H:%M:%SZ" 2>/dev/null
+    fi
+}
+
 # イベントIDが処理済みかチェック
 is_event_processed() {
     local event_type="$1"
@@ -202,6 +219,8 @@ fetch_issues() {
 
     # 最終チェック時刻があれば使用、なければ初期化時刻を使用
     since=$(jq -r ".last_check[\"${repo}_issues\"] // .initialized_at // empty" "$STATE_FILE")
+    # GitHub APIはUTC形式を要求するので変換
+    since=$(to_utc "$since")
 
     local api_url="/repos/${repo}/issues?state=all&sort=created&direction=desc&per_page=30"
     if [[ -n "$since" ]]; then
@@ -230,6 +249,8 @@ fetch_issue_comments() {
 
     # 最終チェック時刻があれば使用、なければ初期化時刻を使用
     since=$(jq -r ".last_check[\"${repo}_issue_comments\"] // .initialized_at // empty" "$STATE_FILE")
+    # GitHub APIはUTC形式を要求するので変換
+    since=$(to_utc "$since")
 
     local api_url="/repos/${repo}/issues/comments?sort=created&direction=desc&per_page=30"
     if [[ -n "$since" ]]; then
@@ -282,6 +303,8 @@ fetch_pr_comments() {
 
     # 最終チェック時刻があれば使用、なければ初期化時刻を使用
     since=$(jq -r ".last_check[\"${repo}_pr_comments\"] // .initialized_at // empty" "$STATE_FILE")
+    # GitHub APIはUTC形式を要求するので変換
+    since=$(to_utc "$since")
 
     local api_url="/repos/${repo}/pulls/comments?sort=created&direction=desc&per_page=30"
     if [[ -n "$since" ]]; then

@@ -146,6 +146,19 @@ responses:
     ---
     *Generated with IGNITE Bot*
 
+# アクセス制御
+# タスクトリガー（@ignite-gh-app）を許可するユーザーを制限
+access_control:
+  # true: ホワイトリストのユーザーのみ許可
+  # false: 全員許可
+  enabled: true
+
+  # 許可ユーザーリスト（GitHubユーザー名）
+  # enabled: true の場合のみ有効
+  allowed_users:
+    # - "admin-user"
+    # - "trusted-developer"
+
 # ログ設定
 logging:
   # ログレベル: debug, info, warn, error

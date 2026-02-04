@@ -103,6 +103,29 @@ load_config() {
     WORKSPACE_DIR=$(grep -E '^\s*workspace:' "$config_file" | head -1 | awk '{print $2}' | tr -d '"')
     WORKSPACE_DIR=${WORKSPACE_DIR:-"workspace"}
     WORKSPACE_DIR="${PROJECT_ROOT}/${WORKSPACE_DIR}"
+
+    # アクセス制御設定
+    ACCESS_CONTROL_ENABLED=$(awk '/^access_control:/{found=1} found && /^[[:space:]]+enabled:/{print $2; exit}' "$config_file" | tr -d '"')
+    ACCESS_CONTROL_ENABLED=${ACCESS_CONTROL_ENABLED:-false}
+
+    # 許可ユーザーリストの読み込み
+    ALLOWED_USERS=()
+    local in_allowed=false
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^[[:space:]]*allowed_users: ]]; then
+            in_allowed=true
+            continue
+        fi
+        if [[ "$in_allowed" == true ]]; then
+            if [[ "$line" =~ ^[[:space:]]*-[[:space:]]*[\"\']?([^\"\']+)[\"\']?$ ]]; then
+                local user="${BASH_REMATCH[1]}"
+                user=$(echo "$user" | xargs)
+                [[ -n "$user" ]] && ALLOWED_USERS+=("$user")
+            elif [[ "$line" =~ ^[[:space:]]*[a-z_]+: ]] && [[ ! "$line" =~ ^[[:space:]]*- ]]; then
+                in_allowed=false
+            fi
+        fi
+    done < "$config_file"
 }
 
 # =============================================================================
@@ -197,6 +220,38 @@ is_human_event() {
 
     # User タイプで、かつ [bot] サフィックスがない場合のみtrue
     [[ "$author_type" == "User" ]] && [[ ! "$author_login" =~ \[bot\]$ ]]
+}
+
+# =============================================================================
+# アクセス制御
+# =============================================================================
+
+# ユーザーがタスクをトリガーする権限があるかチェック
+is_user_authorized() {
+    local username="$1"
+
+    # アクセス制御が無効の場合は全員許可
+    if [[ "$ACCESS_CONTROL_ENABLED" != "true" ]]; then
+        return 0
+    fi
+
+    # 許可リストが空の場合は全員許可（設定ミス防止）
+    if [[ ${#ALLOWED_USERS[@]} -eq 0 ]]; then
+        log_warn "アクセス制御が有効ですが allowed_users が空です。全員許可します"
+        return 0
+    fi
+
+    # ユーザー名を小文字で比較（GitHubは大文字小文字を区別しない）
+    local username_lower=$(echo "$username" | tr '[:upper:]' '[:lower:]')
+
+    for user in "${ALLOWED_USERS[@]}"; do
+        local user_lower=$(echo "$user" | tr '[:upper:]' '[:lower:]')
+        if [[ "$user_lower" == "$username_lower" ]]; then
+            return 0
+        fi
+    done
+
+    return 1
 }
 
 # =============================================================================
@@ -620,7 +675,14 @@ process_issue_comments() {
 
         # トリガーパターンをチェック
         if [[ "$body" =~ $MENTION_PATTERN ]]; then
-            log_event "トリガー検知: $MENTION_PATTERN"
+            log_event "トリガー検知: $MENTION_PATTERN (by $author)"
+
+            # アクセス制御チェック
+            if ! is_user_authorized "$author"; then
+                log_warn "アクセス拒否: ユーザー '$author' はallowed_usersに含まれていません"
+                mark_event_processed "issue_comment" "$id"
+                continue
+            fi
 
             # トリガータイプを判別
             local trigger_type="implement"
@@ -657,6 +719,7 @@ process_prs() {
         local id=$(echo "$pr" | jq -r '.id')
         local author_type=$(echo "$pr" | jq -r '.author_type')
         local author=$(echo "$pr" | jq -r '.author')
+        local body=$(echo "$pr" | jq -r '.body // ""')
 
         # 処理済みチェック
         if is_event_processed "pr" "$id"; then
@@ -671,8 +734,31 @@ process_prs() {
 
         log_event "新規PR検知: #$(echo "$pr" | jq -r '.number') by $author"
 
-        local message_file=$(create_event_message "pr_created" "$repo" "$pr")
-        log_success "メッセージ作成: $message_file"
+        # トリガーパターンをチェック
+        if [[ "$body" =~ $MENTION_PATTERN ]]; then
+            log_event "トリガー検知: $MENTION_PATTERN (by $author)"
+
+            # アクセス制御チェック
+            if ! is_user_authorized "$author"; then
+                log_warn "アクセス拒否: ユーザー '$author' はallowed_usersに含まれていません"
+                mark_event_processed "pr" "$id"
+                continue
+            fi
+
+            # トリガータイプを判別
+            local trigger_type="review"
+            if [[ "$body" =~ (実装|implement) ]]; then
+                trigger_type="implement"
+            elif [[ "$body" =~ (説明|explain) ]]; then
+                trigger_type="explain"
+            fi
+
+            local message_file=$(create_task_message "pr_created" "$repo" "$pr" "$trigger_type")
+            log_success "タスクメッセージ作成: $message_file"
+        else
+            local message_file=$(create_event_message "pr_created" "$repo" "$pr")
+            log_success "メッセージ作成: $message_file"
+        fi
 
         mark_event_processed "pr" "$id"
     done
@@ -694,6 +780,7 @@ process_pr_comments() {
         local id=$(echo "$comment" | jq -r '.id')
         local author_type=$(echo "$comment" | jq -r '.author_type')
         local author=$(echo "$comment" | jq -r '.author')
+        local body=$(echo "$comment" | jq -r '.body // ""')
 
         # 処理済みチェック
         if is_event_processed "pr_comment" "$id"; then
@@ -708,8 +795,31 @@ process_pr_comments() {
 
         log_event "新規PRコメント検知: #$(echo "$comment" | jq -r '.pr_number') by $author"
 
-        local message_file=$(create_event_message "pr_comment" "$repo" "$comment")
-        log_success "メッセージ作成: $message_file"
+        # トリガーパターンをチェック
+        if [[ "$body" =~ $MENTION_PATTERN ]]; then
+            log_event "トリガー検知: $MENTION_PATTERN (by $author)"
+
+            # アクセス制御チェック
+            if ! is_user_authorized "$author"; then
+                log_warn "アクセス拒否: ユーザー '$author' はallowed_usersに含まれていません"
+                mark_event_processed "pr_comment" "$id"
+                continue
+            fi
+
+            # トリガータイプを判別
+            local trigger_type="review"
+            if [[ "$body" =~ (実装|implement) ]]; then
+                trigger_type="implement"
+            elif [[ "$body" =~ (説明|explain) ]]; then
+                trigger_type="explain"
+            fi
+
+            local message_file=$(create_task_message "pr_comment" "$repo" "$comment" "$trigger_type")
+            log_success "タスクメッセージ作成: $message_file"
+        else
+            local message_file=$(create_event_message "pr_comment" "$repo" "$comment")
+            log_success "メッセージ作成: $message_file"
+        fi
 
         mark_event_processed "pr_comment" "$id"
     done

@@ -431,7 +431,7 @@ ignite/
 
 ### Leaderオンリーモード（単独モード）
 
-Sub-LeadersやIGNITIANSを起動せず、LeaderのみでタスクをSystem処理する軽量モードです。
+Sub-LeadersやIGNITIANSを起動せず、Leaderのみでタスクを処理する軽量モードです。
 
 ```bash
 # Leaderオンリーモードで起動

@@ -275,8 +275,15 @@ is_user_authorized() {
 
 # GitHub Appトークンを取得
 get_bot_token() {
-    if [[ -f "${PROJECT_ROOT}/scripts/utils/get_github_app_token.sh" ]]; then
-        "${PROJECT_ROOT}/scripts/utils/get_github_app_token.sh" 2>/dev/null || echo ""
+    local token_script="${SCRIPT_DIR}/get_github_app_token.sh"
+    if [[ -f "$token_script" ]]; then
+        # IGNITE_CONFIG_DIR が設定されていれば、github-app.yaml のパスを渡す
+        if [[ -n "${IGNITE_CONFIG_DIR:-}" ]]; then
+            IGNITE_GITHUB_CONFIG="${IGNITE_CONFIG_DIR}/github-app.yaml" \
+                "$token_script" 2>/dev/null || echo ""
+        else
+            "$token_script" 2>/dev/null || echo ""
+        fi
     else
         echo ""
     fi

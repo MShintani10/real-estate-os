@@ -86,10 +86,16 @@ get_bot_token() {
     local retry_count=0
     local token=""
     local last_error=""
+    local token_script="${SCRIPT_DIR}/get_github_app_token.sh"
 
     while [[ $retry_count -lt $BOT_TOKEN_MAX_RETRIES ]]; do
         # トークン取得を試行
-        token=$("${SCRIPT_DIR}/get_github_app_token.sh" 2>&1)
+        # IGNITE_CONFIG_DIR が設定されていれば、github-app.yaml のパスを渡す
+        if [[ -n "${IGNITE_CONFIG_DIR:-}" ]]; then
+            token=$(IGNITE_GITHUB_CONFIG="${IGNITE_CONFIG_DIR}/github-app.yaml" "$token_script" 2>&1)
+        else
+            token=$("$token_script" 2>&1)
+        fi
         local exit_code=$?
 
         if [[ $exit_code -eq 0 ]] && [[ -n "$token" ]] && [[ "$token" == ghs_* ]]; then

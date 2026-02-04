@@ -190,7 +190,13 @@ setup_repo() {
     else
         log_info "リポジトリをclone中: $repo"
         # privateリポジトリ対応：GitHub App Tokenを使用
-        local bot_token=$("${SCRIPT_DIR}/get_github_app_token.sh" 2>/dev/null || echo "")
+        local bot_token
+        # IGNITE_CONFIG_DIR が設定されていれば、github-app.yaml のパスを渡す
+        if [[ -n "${IGNITE_CONFIG_DIR:-}" ]]; then
+            bot_token=$(IGNITE_GITHUB_CONFIG="${IGNITE_CONFIG_DIR}/github-app.yaml" "${SCRIPT_DIR}/get_github_app_token.sh" 2>/dev/null || echo "")
+        else
+            bot_token=$("${SCRIPT_DIR}/get_github_app_token.sh" 2>/dev/null || echo "")
+        fi
         if [[ -n "$bot_token" ]]; then
             log_info "GitHub App Token を使用してclone"
             GH_TOKEN="$bot_token" gh repo clone "$repo" "$repo_path" -- --branch "$branch"

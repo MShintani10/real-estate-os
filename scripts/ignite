@@ -507,6 +507,15 @@ ignitians:
   ids: [$(seq -s ', ' 1 ${actual_ignitian_count} 2>/dev/null || echo "")]
 EOF
 
+    # セッション→ワークスペースのマッピングを保存（stop時の自動検出用）
+    mkdir -p "$IGNITE_CONFIG_DIR/sessions"
+    cat > "$IGNITE_CONFIG_DIR/sessions/${SESSION_NAME}.yaml" <<EOF
+# IGNITE セッション情報（自動生成）
+session_name: "${SESSION_NAME}"
+workspace_dir: "${WORKSPACE_DIR}"
+started_at: "$(date -Iseconds)"
+EOF
+
     # コスト追跡用のセッションID記録
     print_info "コスト追跡用のセッション情報を記録中..."
     mkdir -p "$WORKSPACE_DIR/costs/history"
@@ -837,8 +846,15 @@ cmd_stop() {
         fi
     fi
 
-    # ワークスペースを設定
-    setup_workspace
+    # セッション情報からワークスペースを自動検出
+    local session_info="$IGNITE_CONFIG_DIR/sessions/${SESSION_NAME}.yaml"
+    if [[ -f "$session_info" ]]; then
+        WORKSPACE_DIR=$(grep "^workspace_dir:" "$session_info" | awk '{print $2}' | tr -d '"')
+    fi
+    # フォールバック
+    if [[ -z "$WORKSPACE_DIR" ]]; then
+        setup_workspace
+    fi
 
     # GitHub Watcher を停止
     if [[ -f "$WORKSPACE_DIR/github_watcher.pid" ]]; then
@@ -868,6 +884,9 @@ cmd_stop() {
     # セッション終了
     print_warning "tmuxセッションを終了中..."
     tmux kill-session -t "$SESSION_NAME"
+
+    # セッション情報ファイルを削除
+    rm -f "$IGNITE_CONFIG_DIR/sessions/${SESSION_NAME}.yaml"
 
     print_success "IGNITE システムを停止しました"
 }

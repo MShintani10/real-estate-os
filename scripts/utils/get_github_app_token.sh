@@ -104,10 +104,11 @@ get_installation_id_for_repo() {
     local installation_id
 
     # JWTトークンを生成（App認証用）
+    # --jwt オプションでJWTを直接取得（--token-onlyはJWTモードでは使用不可）
     jwt_token=$(gh token generate \
         --app-id "$APP_ID" \
         --key "$PRIVATE_KEY_PATH" \
-        --jwt-only 2>/dev/null | jq -r '.token // empty' 2>/dev/null)
+        --jwt 2>/dev/null)
 
     if [[ -z "$jwt_token" ]]; then
         error "JWTトークンの生成に失敗しました"
@@ -115,7 +116,9 @@ get_installation_id_for_repo() {
     fi
 
     # リポジトリのインストール情報を取得
-    installation_id=$(GH_TOKEN="$jwt_token" gh api "/repos/${repo}/installation" \
+    # JWT認証にはBearerヘッダーが必要（GH_TOKENはtokenタイプで送信されるため使用不可）
+    installation_id=$(gh api "/repos/${repo}/installation" \
+        -H "Authorization: Bearer $jwt_token" \
         --jq '.id' 2>/dev/null)
 
     if [[ -z "$installation_id" ]] || [[ "$installation_id" == "null" ]]; then

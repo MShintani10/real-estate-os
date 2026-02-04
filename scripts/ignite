@@ -582,16 +582,14 @@ EOF
             print_info "ログ: $watcher_log"
 
             # キューモニター起動（Watcher有効時のみ）
-            # ソロモード時はキューモニター不要（他エージェントがいないため）
-            if [[ "$agent_mode" != "leader" ]]; then
-                print_info "キューモニターを起動中..."
-                local queue_log="$WORKSPACE_DIR/logs/queue_monitor.log"
-                "$SCRIPT_DIR/utils/queue_monitor.sh" -s "$SESSION_NAME" >> "$queue_log" 2>&1 &
-                local queue_pid=$!
-                echo "$queue_pid" > "$WORKSPACE_DIR/queue_monitor.pid"
-                print_success "キューモニター起動完了 (PID: $queue_pid)"
-                print_info "ログ: $queue_log"
-            fi
+            # Leaderのキュー監視のため、単独モードでも起動が必要
+            print_info "キューモニターを起動中..."
+            local queue_log="$WORKSPACE_DIR/logs/queue_monitor.log"
+            "$SCRIPT_DIR/utils/queue_monitor.sh" -s "$SESSION_NAME" >> "$queue_log" 2>&1 &
+            local queue_pid=$!
+            echo "$queue_pid" > "$WORKSPACE_DIR/queue_monitor.pid"
+            print_success "キューモニター起動完了 (PID: $queue_pid)"
+            print_info "ログ: $queue_log"
         else
             print_warning "github-watcher.yaml が見つかりません。Watcher起動をスキップ"
         fi

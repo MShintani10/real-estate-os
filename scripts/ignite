@@ -384,8 +384,13 @@ EOF
 
     # Leaderにシステムプロンプトを読み込ませる
     print_info "Leaderシステムプロンプトをロード中..."
+    local instruction_file="instructions/leader.md"
+    if [[ "$agent_mode" == "leader" ]]; then
+        instruction_file="instructions/leader-solo.md"
+        print_info "単独モード: $instruction_file を使用"
+    fi
     tmux send-keys -t "$SESSION_NAME:ignite" \
-        "instructions/leader.md を読んで、あなたはLeader（伊羽ユイ）として振る舞ってください。ワークスペースは $WORKSPACE_DIR です。$WORKSPACE_DIR/queue/leader/ 内のメッセージを確認してください。instructions内の workspace/ は $WORKSPACE_DIR に読み替えてください。"
+        "$instruction_file を読んで、あなたはLeader（伊羽ユイ）として振る舞ってください。ワークスペースは $WORKSPACE_DIR です。$WORKSPACE_DIR/queue/leader/ 内のメッセージを確認してください。instructions内の workspace/ は $WORKSPACE_DIR に読み替えてください。"
     sleep 0.3
     tmux send-keys -t "$SESSION_NAME:ignite" C-m
 
@@ -577,6 +582,7 @@ EOF
             print_info "ログ: $watcher_log"
 
             # キューモニター起動（Watcher有効時のみ）
+            # Leaderのキュー監視のため、単独モードでも起動が必要
             print_info "キューモニターを起動中..."
             local queue_log="$WORKSPACE_DIR/logs/queue_monitor.log"
             "$SCRIPT_DIR/utils/queue_monitor.sh" -s "$SESSION_NAME" >> "$queue_log" 2>&1 &

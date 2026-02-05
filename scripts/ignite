@@ -458,7 +458,7 @@ priority: high
 payload:
   message: "システムが起動しました。初期化を完了してください。"
   action: "initialize_dashboard"
-status: processing
+status: queued
 EOF
 
     echo ""

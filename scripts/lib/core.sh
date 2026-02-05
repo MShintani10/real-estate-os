@@ -1,7 +1,7 @@
 # lib/core.sh - 定数・カラー定義・出力ヘルパー
 [[ -n "${__LIB_CORE_LOADED:-}" ]] && return; __LIB_CORE_LOADED=1
 
-VERSION="0.1.14"
+VERSION="0.1.15"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
@@ -43,6 +43,7 @@ WORKSPACE_DIR=""
 # Sub-Leaders 定義
 SUB_LEADERS=("strategist" "architect" "evaluator" "coordinator" "innovator")
 SUB_LEADER_NAMES=("義賀リオ" "祢音ナナ" "衣結ノア" "通瀬アイナ" "恵那ツムギ")
+LEADER_NAME="伊羽ユイ"
 
 # デフォルト設定
 DEFAULT_WORKER_COUNT=8

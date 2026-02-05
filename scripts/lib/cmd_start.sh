@@ -153,8 +153,13 @@ EOF
     tmux new-session -d -s "$SESSION_NAME" -n ignite
     sleep 0.5  # セッション作成を待機
 
+    # ペインボーダーにキャラクター名を常時表示
+    tmux set-option -t "$SESSION_NAME" pane-border-status top
+    tmux set-option -t "$SESSION_NAME" pane-border-format " #{pane_title} "
+
     # Leader ペイン (pane 0)
-    print_info "Leader (伊羽ユイ) を起動中..."
+    print_info "Leader ($LEADER_NAME) を起動中..."
+    tmux select-pane -t "$SESSION_NAME:ignite.0" -T "$LEADER_NAME (Leader)"
     tmux send-keys -t "$SESSION_NAME:ignite" \
         "cd '$WORKSPACE_DIR' && claude --model claude-opus-4-5-20251101 --dangerously-skip-permissions" Enter
 

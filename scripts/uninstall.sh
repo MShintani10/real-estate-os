@@ -5,7 +5,22 @@
 set -e
 set -u
 
-VERSION="1.0.0"
+SCRIPT_DIR_TMP="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VERSION="__BUILD_VERSION__"
+if [[ "$VERSION" == "__BUILD_VERSION__" ]]; then
+    local_core="$SCRIPT_DIR_TMP/share/scripts/lib/core.sh"
+    if [[ ! -f "$local_core" ]]; then
+        local_core="$SCRIPT_DIR_TMP/lib/core.sh"
+    fi
+    if [[ ! -f "$local_core" ]]; then
+        local_core="$SCRIPT_DIR_TMP/../scripts/lib/core.sh"
+    fi
+    if [[ -f "$local_core" ]]; then
+        VERSION=$(grep '^VERSION=' "$local_core" | head -1 | cut -d'"' -f2)
+    fi
+    VERSION="${VERSION:-0.0.0}"
+fi
+unset SCRIPT_DIR_TMP
 
 # カラー定義
 GREEN='\033[0;32m'

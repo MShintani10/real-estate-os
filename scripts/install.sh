@@ -5,8 +5,24 @@
 set -e
 set -u
 
-VERSION="0.1.5"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# バージョン取得: ビルド時に埋め込まれた値 → share/scripts/lib/core.sh → フォールバック
+VERSION="__BUILD_VERSION__"
+if [[ "$VERSION" == "__BUILD_VERSION__" ]]; then
+    # ビルド前のソースから直接実行された場合
+    local_core="$SCRIPT_DIR/share/scripts/lib/core.sh"
+    if [[ ! -f "$local_core" ]]; then
+        local_core="$SCRIPT_DIR/lib/core.sh"
+    fi
+    if [[ ! -f "$local_core" ]]; then
+        local_core="$SCRIPT_DIR/../scripts/lib/core.sh"
+    fi
+    if [[ -f "$local_core" ]]; then
+        VERSION=$(grep '^VERSION=' "$local_core" | head -1 | cut -d'"' -f2)
+    fi
+    VERSION="${VERSION:-0.0.0}"
+fi
 
 # カラー定義
 GREEN='\033[0;32m'

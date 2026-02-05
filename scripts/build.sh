@@ -116,7 +116,12 @@ copy_installers() {
     cp "$SCRIPT_DIR/install.sh" "$BUILD_DIR/install.sh"
     cp "$SCRIPT_DIR/uninstall.sh" "$BUILD_DIR/uninstall.sh"
     chmod +x "$BUILD_DIR/install.sh" "$BUILD_DIR/uninstall.sh"
-    print_success "install.sh, uninstall.sh をコピーしました"
+
+    # __BUILD_VERSION__ プレースホルダーを実際のバージョンに置換
+    sed -i "s/__BUILD_VERSION__/$VERSION/g" "$BUILD_DIR/install.sh"
+    sed -i "s/__BUILD_VERSION__/$VERSION/g" "$BUILD_DIR/uninstall.sh"
+
+    print_success "install.sh, uninstall.sh をコピーしました (VERSION=$VERSION)"
 }
 
 copy_config() {

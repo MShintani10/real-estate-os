@@ -206,12 +206,46 @@ install_data() {
         fi
     fi
 
+    # scripts/ignite 本体 + scripts/lib/ モジュール
+    local source_scripts="$SCRIPT_DIR/share/scripts"
+    if [[ ! -d "$source_scripts" ]]; then
+        source_scripts="$SCRIPT_DIR/../scripts"
+    fi
+
+    # scripts/ignite 本体
+    if [[ -f "$source_scripts/ignite" ]]; then
+        mkdir -p "$DATA_DIR/scripts"
+        cp "$source_scripts/ignite" "$DATA_DIR/scripts/ignite"
+        chmod +x "$DATA_DIR/scripts/ignite"
+        if [[ "$UPGRADE" == "true" ]]; then
+            print_success "scripts/ignite を $DATA_DIR/scripts にアップグレードしました"
+        else
+            print_success "scripts/ignite を $DATA_DIR/scripts にインストールしました"
+        fi
+    fi
+
+    # scripts/lib/ モジュール
+    local source_lib="$source_scripts/lib"
+    if [[ -d "$source_lib" ]]; then
+        mkdir -p "$DATA_DIR/scripts/lib"
+        cp "$source_lib"/*.sh "$DATA_DIR/scripts/lib/"
+        local count=$(ls -1 "$DATA_DIR/scripts/lib"/*.sh 2>/dev/null | wc -l)
+        if [[ "$UPGRADE" == "true" ]]; then
+            print_success "scripts/lib ($count モジュール) を $DATA_DIR/scripts/lib にアップグレードしました"
+        else
+            print_success "scripts/lib ($count モジュール) を $DATA_DIR/scripts/lib にインストールしました"
+        fi
+    fi
+
     # scripts/utils ディレクトリ
-    local source_utils="$SCRIPT_DIR/share/scripts/utils"
+    local source_utils="$source_scripts/utils"
     if [[ ! -d "$source_utils" ]]; then
-        source_utils="$SCRIPT_DIR/utils"
+        source_utils="$SCRIPT_DIR/share/scripts/utils"
         if [[ ! -d "$source_utils" ]]; then
-            source_utils="$SCRIPT_DIR/../scripts/utils"
+            source_utils="$SCRIPT_DIR/utils"
+            if [[ ! -d "$source_utils" ]]; then
+                source_utils="$SCRIPT_DIR/../scripts/utils"
+            fi
         fi
     fi
 

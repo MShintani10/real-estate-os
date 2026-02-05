@@ -8,8 +8,8 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# バージョン取得（ignite スクリプトから）
-VERSION=$(grep '^VERSION=' "$SCRIPT_DIR/ignite" | head -1 | cut -d'"' -f2)
+# バージョン取得（lib/core.sh から）
+VERSION=$(grep '^VERSION=' "$SCRIPT_DIR/lib/core.sh" | head -1 | cut -d'"' -f2)
 if [[ -z "$VERSION" ]]; then
     VERSION="1.0.0"
 fi
@@ -78,16 +78,36 @@ clean_dist() {
 prepare_directories() {
     print_header "ディレクトリ準備"
 
-    mkdir -p "$BUILD_DIR"/{bin,config,share/instructions,share/scripts/utils}
+    mkdir -p "$BUILD_DIR"/{bin,config,share/instructions,share/scripts/utils,share/scripts/lib}
     print_success "ビルドディレクトリを作成しました: $BUILD_DIR"
 }
 
 copy_binary() {
-    print_header "実行ファイルのコピー"
+    print_header "実行ファイルのコピー（ラッパー生成）"
 
-    cp "$SCRIPT_DIR/ignite" "$BUILD_DIR/bin/ignite"
+    # bin/ignite は薄いラッパー: 本体は share/scripts/ignite に配置
+    cat > "$BUILD_DIR/bin/ignite" << 'WRAPPER'
+#!/bin/bash
+# IGNITE launcher - delegates to the main script in DATA_DIR
+DATA_DIR="${IGNITE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/ignite}"
+exec "$DATA_DIR/scripts/ignite" "$@"
+WRAPPER
     chmod +x "$BUILD_DIR/bin/ignite"
-    print_success "ignite をコピーしました"
+    print_success "ignite ラッパーを生成しました"
+}
+
+copy_main_script() {
+    print_header "メインスクリプトのコピー"
+
+    # scripts/ignite 本体
+    cp "$SCRIPT_DIR/ignite" "$BUILD_DIR/share/scripts/ignite"
+    chmod +x "$BUILD_DIR/share/scripts/ignite"
+    print_success "scripts/ignite をコピーしました"
+
+    # scripts/lib/ モジュール
+    cp "$SCRIPT_DIR/lib"/*.sh "$BUILD_DIR/share/scripts/lib/"
+    local count=$(ls -1 "$BUILD_DIR/share/scripts/lib"/*.sh 2>/dev/null | wc -l)
+    print_success "$count 個の lib モジュールをコピーしました"
 }
 
 copy_installers() {
@@ -273,6 +293,8 @@ main() {
     prepare_directories
     echo ""
     copy_binary
+    echo ""
+    copy_main_script
     echo ""
     copy_installers
     echo ""

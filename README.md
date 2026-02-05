@@ -265,7 +265,7 @@ sequenceDiagram
 **ポイント:**
 - すべてのメッセージは `status: queued` で送信
 - queue_monitorが検知し、tmux経由で受信側に通知
-- 受信側は処理後、ファイルを `processed/` に移動
+- 受信側は処理後、ファイルを削除
 
 ## 👥 メンバー紹介
 
@@ -393,7 +393,9 @@ ignite/
 │   │   ├── evaluator/
 │   │   ├── coordinator/
 │   │   ├── innovator/
-│   │   └── ignitians/
+│   │   ├── ignitian_1/          # IGNITIAN-1キュー
+│   │   ├── ignitian_2/          # IGNITIAN-2キュー
+│   │   └── ignitian_{n}/        # IGNITIAN-Nキュー（動的）
 │   ├── context/                # プロジェクトコンテキスト
 │   ├── logs/                   # ログファイル
 │   └── dashboard.md            # リアルタイム進捗ダッシュボード
@@ -641,10 +643,10 @@ q                 # スクロールモード終了
 - ⏸ Innovator (恵那ツムギ): 待機中
 
 ## IGNITIANS状態
-- ✓ IGNITIAN-0: タスク完了 (README骨組み作成)
-- ⏳ IGNITIAN-1: 実行中 (インストール手順作成)
-- ⏳ IGNITIAN-2: 実行中 (使用例作成)
-- ⏸ IGNITIAN-3~7: 待機中
+- ✓ IGNITIAN-1: タスク完了 (README骨組み作成)
+- ⏳ IGNITIAN-2: 実行中 (インストール手順作成)
+- ⏳ IGNITIAN-3: 実行中 (使用例作成)
+- ⏸ IGNITIAN-4~8: 待機中
 
 ## タスク進捗
 - 完了: 1 / 3
@@ -654,7 +656,7 @@ q                 # スクロールモード終了
 ## 最新ログ
 [17:05:23] [義賀リオ] タスク分解を完了しました
 [17:06:00] [通瀬アイナ] タスクを割り当てました
-[17:08:12] [IGNITIAN-0] タスクが完了しました
+[17:08:12] [IGNITIAN-1] タスクが完了しました
 ```
 
 **アイコンの意味:**
@@ -735,7 +737,7 @@ brew install tmux
 # 該当するIGNITIANのペインを確認
 ./scripts/ignite attach
 Ctrl+b q    # ペイン番号を確認
-Ctrl+b q 6  # IGNITIAN-0のペインへ移動
+Ctrl+b q 6  # IGNITIAN-1のペインへ移動
 ```
 
 ### ダッシュボードが更新されない
@@ -783,7 +785,7 @@ priority: high               # 優先度（high/normal/low）
 payload:                     # メッセージ本体
   goal: "READMEファイルを作成する"
   context: "プロジェクト説明が必要"
-status: queued              # 状態（queued/processing/completed）
+status: queued              # 状態（queued/processing）
 ```
 
 ### 主要なメッセージタイプ

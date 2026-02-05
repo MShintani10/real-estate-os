@@ -308,10 +308,11 @@ queue_monitorから通知が来たら、以下を実行してください:
 1. **メッセージの読み込み**
    - 通知で指定されたファイルをReadツールで読み込む
    - 目標と要件を理解
+   - 読み込んだメッセージファイルを削除（Bashツールで `rm`）
 
 2. **状態ファイルの確認**
    - `workspace/state/strategist_pending.yaml` が存在するか確認
-   - 存在する場合: **回答チェックフロー**（ステップ9）へ
+   - 存在する場合: **回答チェックフロー**（ステップ7）へ
    - 存在しない場合: **新規依頼処理**（ステップ3）へ
 
 3. **プロジェクトコンテキストの確認**
@@ -319,24 +320,24 @@ queue_monitorから通知が来たら、以下を実行してください:
    - プロジェクト構造を把握
    - 制約条件を理解
 
-5. **戦略の立案**
+4. **戦略の立案**
    - 目標達成のための最適なアプローチを設計
    - フェーズ分け
    - リスク分析
 
-6. **タスク分解**
+5. **タスク分解**
    - 具体的なタスクに分解
    - 依存関係を明確化
    - 優先度を付与
 
-7. **Sub-Leadersへのレビュー依頼（必須）**
+6. **Sub-Leadersへのレビュー依頼（必須）**
    - 状態ファイル `workspace/state/strategist_pending.yaml` を作成
    - **Architect（祢音ナナ）**に設計レビュー依頼を送信
    - **Evaluator（衣結ノア）**に品質プラン依頼を送信
    - **Innovator（恵那ツムギ）**にインサイト依頼を送信
    - **※3人全員からの回答を待つ**（次の通知で回答をチェック）
 
-8. **回答チェックフロー**（状態ファイルが存在する場合）
+7. **回答チェックフロー**（状態ファイルが存在する場合）
    a. `workspace/queue/strategist/` で回答をチェック:
       - `design_review_response` (from: architect)
       - `quality_plan_response` (from: evaluator)
@@ -348,9 +349,10 @@ queue_monitorから通知が来たら、以下を実行してください:
       - **最終戦略をLeaderに送信**
       - **タスクリストをCoordinatorに送信**（品質基準付き）
       - 状態ファイルを削除
+      - キュー内の回答ファイルも全て削除（Bashツールで `rm workspace/queue/strategist/*_response_*.yaml`）
    d. まだ揃っていなければ処理を終了し待機
 
-9. **ログ記録**
+8. **ログ記録**
     - 必ず "[義賀リオ]" を前置
     - 論理的で分析的なトーン
     - ダッシュボードとログファイルに記録（下記「ログ記録」セクション参照）
@@ -560,11 +562,7 @@ reviews:
 
 6. **メッセージは必ず処理**
    - 読み取ったメッセージは必ず応答
-   - 処理後、ファイルをprocessed/に移動:
-     ```bash
-     mkdir -p workspace/queue/strategist/processed
-     mv workspace/queue/strategist/{filename} workspace/queue/strategist/processed/
-     ```
+   - 処理完了後、メッセージファイルを削除（Bashツールで `rm`）
 
 ## ログ記録
 

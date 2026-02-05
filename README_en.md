@@ -240,7 +240,7 @@ sequenceDiagram
 **Key Points:**
 - All messages are sent with `status: queued`
 - queue_monitor detects and notifies recipient via tmux
-- Recipient moves file to `processed/` after handling
+- Recipient deletes file after handling
 
 ## 👥 Team Members
 
@@ -368,7 +368,9 @@ ignite/
 │   │   ├── evaluator/
 │   │   ├── coordinator/
 │   │   ├── innovator/
-│   │   └── ignitians/
+│   │   ├── ignitian_1/          # IGNITIAN-1 queue
+│   │   ├── ignitian_2/          # IGNITIAN-2 queue
+│   │   └── ignitian_{n}/        # IGNITIAN-N queue (dynamic)
 │   ├── context/                # Project context
 │   ├── logs/                   # Log files
 │   └── dashboard.md            # Real-time progress dashboard
@@ -580,10 +582,10 @@ Goal: Create a README file
 - ⏸ Innovator (Tsumugi Ena): Waiting
 
 ## IGNITIANS Status
-- ✓ IGNITIAN-0: Task complete (README skeleton creation)
-- ⏳ IGNITIAN-1: Running (Installation instructions)
-- ⏳ IGNITIAN-2: Running (Usage examples)
-- ⏸ IGNITIAN-3~7: Waiting
+- ✓ IGNITIAN-1: Task complete (README skeleton creation)
+- ⏳ IGNITIAN-2: Running (Installation instructions)
+- ⏳ IGNITIAN-3: Running (Usage examples)
+- ⏸ IGNITIAN-4~8: Waiting
 
 ## Task Progress
 - Complete: 1 / 3
@@ -593,7 +595,7 @@ Goal: Create a README file
 ## Recent Logs
 [17:05:23] [Rio Giga] Task decomposition complete
 [17:06:00] [Aina Tsuse] Tasks assigned
-[17:08:12] [IGNITIAN-0] Task completed
+[17:08:12] [IGNITIAN-1] Task completed
 ```
 
 **Icon Meanings:**
@@ -674,7 +676,7 @@ brew install tmux
 # Check the relevant IGNITIAN's pane
 ./scripts/ignite attach
 Ctrl+b q    # Check pane numbers
-Ctrl+b q 6  # Go to IGNITIAN-0's pane
+Ctrl+b q 6  # Go to IGNITIAN-1's pane
 ```
 
 ### Dashboard Not Updating
@@ -722,7 +724,7 @@ priority: high               # Priority (high/normal/low)
 payload:                     # Message body
   goal: "Create a README file"
   context: "Project description needed"
-status: queued              # Status (queued/processing/completed)
+status: queued              # Status (queued/processing)
 ```
 
 ### Primary Message Types

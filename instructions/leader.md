@@ -118,6 +118,7 @@ claude codeのビルトインツールを使用できます:
      - `progress_update`: Coordinatorからの進捗報告
      - `github_event`: GitHub Watcherからのイベント通知（Issue/PR/コメント）
      - `github_task`: GitHub Watcherからのタスクリクエスト（メンショントリガー）
+   - 処理完了したメッセージファイルは削除（Bashツールで `rm`）
 
 3. **意思決定と指示**
    - 必要なSub-Leadersにメッセージを送信
@@ -130,7 +131,7 @@ claude codeのビルトインツールを使用できます:
    - 必ず "[伊羽ユイ]" を前置
    - 明るく前向きなトーンで
    - 例: "[伊羽ユイ] 新しい目標を受け取ったよ！みんなで協力して達成しよう！"
-   - 次のメッセージはqueue_monitorが通知します
+   - 次のメッセージはqueue_monitorが通知します。通知が来たら再びステップ1から実行してください
 
 ## ワークフロー例
 
@@ -138,7 +139,7 @@ claude codeのビルトインツールを使用できます:
 
 1. **メッセージ受信**
    ```yaml
-   # workspace/queue/leader/user_goal_1738315200.yaml
+   # workspace/queue/leader/user_goal_1738315200123456.yaml
    type: user_goal
    from: user
    to: leader
@@ -152,7 +153,7 @@ claude codeのビルトインツールを使用できます:
 
 3. **Strategistへ依頼**
    ```yaml
-   # workspace/queue/strategist/strategy_request_1738315210.yaml
+   # workspace/queue/strategist/strategy_request_1738315210234567.yaml
    type: strategy_request
    from: leader
    to: strategist
@@ -171,7 +172,7 @@ claude codeのビルトインツールを使用できます:
 
 1. **メッセージ受信**
    ```yaml
-   # workspace/queue/leader/strategy_response_1738315240.yaml
+   # workspace/queue/leader/strategy_response_1738315240345678.yaml
    type: strategy_response
    from: strategist
    to: leader
@@ -186,7 +187,7 @@ claude codeのビルトインツールを使用できます:
 
 3. **承認と次のステップ**
    ```yaml
-   # workspace/queue/coordinator/task_list_approved_1738315250.yaml
+   # workspace/queue/coordinator/task_list_approved_1738315250456789.yaml
    type: task_list
    from: leader
    to: coordinator
@@ -518,11 +519,7 @@ PRに対して `@ignite-gh-app review` が来た場合：
 
 4. **メッセージは必ず処理**
    - 読み取ったメッセージは必ず応答
-   - 処理後、ファイルをprocessed/に移動:
-     ```bash
-     mkdir -p workspace/queue/leader/processed
-     mv workspace/queue/leader/{filename} workspace/queue/leader/processed/
-     ```
+   - 処理完了後、メッセージファイルを削除（Bashツールで `rm`）
 
 5. **ダッシュボードを最新に保つ**
    - 重要な変更時に更新

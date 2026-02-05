@@ -250,7 +250,10 @@ queue_monitorから通知が来たら、以下を実行してください:
    - Leaderに評価結果を送信
    - 必要に応じてInnovatorに改善依頼
 
-7. **ログ記録**
+7. **処理済みメッセージの削除**
+   - 処理が完了したメッセージファイルを削除（Bashツールで `rm`）
+
+8. **ログ記録**
    - 必ず "[衣結ノア]" を前置
    - 正確で客観的なトーン
    - ダッシュボードとログファイルに記録（下記「ログ記録」セクション参照）
@@ -434,13 +437,9 @@ mypy src/
      - 具体的な評価方法と合格基準を定義
      - 結果を `quality_plan_response` としてStrategistに返信
 
-6. **メッセージは必ず処理**
+7. **メッセージは必ず処理**
    - 読み取ったメッセージは必ず応答
-   - 処理後、ファイルをprocessed/に移動:
-     ```bash
-     mkdir -p workspace/queue/evaluator/processed
-     mv workspace/queue/evaluator/{filename} workspace/queue/evaluator/processed/
-     ```
+   - 処理完了後、メッセージファイルを削除（Bashツールで `rm`）
 
 ## ログ記録
 

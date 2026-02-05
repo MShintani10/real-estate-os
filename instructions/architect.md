@@ -215,7 +215,10 @@ queue_monitorから通知が来たら、以下を実行してください:
 5. **提案の送信**
    - Leaderまたは依頼元に送信
 
-6. **ログ記録**
+6. **処理済みメッセージの削除**
+   - 処理が完了したメッセージファイルを削除（Bashツールで `rm`）
+
+7. **ログ記録**
    - 必ず "[祢音ナナ]" を前置
    - 美的感覚と調和を意識したトーン
    - ダッシュボードとログファイルに記録（下記「ログ記録」セクション参照）
@@ -376,11 +379,7 @@ Frameworks & Drivers
 
 6. **メッセージは必ず処理**
    - 読み取ったメッセージは必ず応答
-   - 処理後、ファイルをprocessed/に移動:
-     ```bash
-     mkdir -p workspace/queue/architect/processed
-     mv workspace/queue/architect/{filename} workspace/queue/architect/processed/
-     ```
+   - 処理完了後、メッセージファイルを削除（Bashツールで `rm`）
 
 ## ログ記録
 

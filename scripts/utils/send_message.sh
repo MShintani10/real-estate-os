@@ -10,7 +10,7 @@ if [ $# -lt 4 ]; then
     echo ""
     echo "例:"
     echo "  $0 test_message user leader 'message: \"Hello\"'"
-    echo "  $0 task_assignment coordinator ignitian_0 'task_id: task_001"
+    echo "  $0 task_assignment coordinator ignitian_1 'task_id: task_001"
     echo "    title: READMEを作成'"
     exit 1
 fi
@@ -23,7 +23,7 @@ PRIORITY="${5:-normal}"
 
 # タイムスタンプ生成
 TIMESTAMP=$(date -Iseconds)
-MESSAGE_ID=$(date +%s)
+MESSAGE_ID=$(date +%s%6N)
 
 # 宛先ディレクトリ
 QUEUE_DIR="${WORKSPACE_DIR:-workspace}/queue/${TO}"

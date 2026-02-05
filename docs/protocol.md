@@ -86,8 +86,6 @@ date -Iseconds
 **有効な値:**
 - `queued` - キュー待ち（新規メッセージ）
 - `processing` - 処理中（通知済み）
-- `completed` - 完了
-- `error` - エラー
 
 ## メッセージタイプ別仕様
 
@@ -189,7 +187,7 @@ CoordinatorからIGNITIANへのタスク割り当て。
 ```yaml
 type: task_assignment
 from: coordinator
-to: ignitian_0
+to: ignitian_1
 timestamp: "2026-01-31T17:06:00+09:00"
 priority: high
 payload:
@@ -213,7 +211,7 @@ IGNITIANからCoordinatorへの完了報告。
 **成功時:**
 ```yaml
 type: task_completed
-from: ignitian_0
+from: ignitian_1
 to: coordinator
 timestamp: "2026-01-31T17:07:30+09:00"
 priority: normal
@@ -233,7 +231,7 @@ status: queued
 **エラー時:**
 ```yaml
 type: task_completed
-from: ignitian_0
+from: ignitian_1
 to: coordinator
 timestamp: "2026-01-31T17:07:30+09:00"
 priority: high
@@ -393,17 +391,19 @@ status: queued
 メッセージファイルは以下の命名規則に従います:
 
 ```
-{message_type}_{timestamp_unix}.yaml
+{message_type}_{message_id}.yaml
 ```
 
+`message_id` はマイクロ秒精度のUnixタイムスタンプ（`date +%s%6N`、16桁）です。
+
 **例:**
-- `user_goal_1738315200.yaml`
-- `task_assignment_1738315260.yaml`
-- `task_completed_1738315350.yaml`
+- `user_goal_1738315200123456.yaml`
+- `task_assignment_1738315260234567.yaml`
+- `task_completed_1738315350345678.yaml`
 
 Bashでの生成:
 ```bash
-MESSAGE_FILE="workspace/queue/${TO}/${TYPE}_$(date +%s).yaml"
+MESSAGE_FILE="workspace/queue/${TO}/${TYPE}_$(date +%s%6N).yaml"
 ```
 
 ## キューディレクトリ
@@ -418,10 +418,10 @@ workspace/queue/
 ├── evaluator/        # Evaluator宛て
 ├── coordinator/      # Coordinator宛て
 ├── innovator/        # Innovator宛て
-└── ignitians/        # IGNITIANS宛て
-    ├── ignitian_0.yaml
-    ├── ignitian_1.yaml
-    └── ...
+├── ignitian_1/       # IGNITIAN-1宛て
+│   └── task_assignment_1770263544123456.yaml
+├── ignitian_2/       # IGNITIAN-2宛て
+└── ignitian_3/       # IGNITIAN-3宛て
 ```
 
 ## メッセージ処理フロー
@@ -430,7 +430,7 @@ workspace/queue/
 
 1. **メッセージ作成**
    ```bash
-   cat > workspace/queue/${TO}/${TYPE}_$(date +%s).yaml <<EOF
+   cat > workspace/queue/${TO}/${TYPE}_$(date +%s%6N).yaml <<EOF
    type: ${TYPE}
    from: ${FROM}
    to: ${TO}
@@ -492,7 +492,7 @@ workspace/queue/
 
 ### パフォーマンス
 
-1. **ポーリング間隔**: 30秒が標準
+1. **ポーリング間隔**: 10秒がデフォルト
 2. **バッチ処理**: 複数メッセージをまとめて処理
 3. **非同期**: ブロッキングを避ける
 
@@ -518,7 +518,7 @@ workspace/queue/
 ```yaml
 type: task_assignment
 from: coordinator
-to: ignitian_0
+to: ignitian_1
 # ... 標準フィールド ...
 custom_field: "カスタム値"
 metadata:

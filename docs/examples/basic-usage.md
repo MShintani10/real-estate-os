@@ -14,7 +14,7 @@
 
 ```bash
 cd /path/to/ignite
-bash scripts/ignite_start.sh
+./scripts/ignite start
 ```
 
 出力例:
@@ -37,7 +37,7 @@ Leaderに初期化メッセージを送信中...
 次のステップ:
   1. tmuxセッションに接続: tmux attach -t ignite-session
   2. ダッシュボード確認: cat workspace/dashboard.md
-  3. タスク投入: bash scripts/ignite_plan.sh "目標"
+  3. タスク投入: ./scripts/ignite plan "目標"
 
 tmuxセッションにアタッチしますか? (Y/n):
 ```
@@ -47,7 +47,7 @@ tmuxセッションにアタッチしますか? (Y/n):
 別のターミナルで:
 
 ```bash
-bash scripts/ignite_plan.sh "READMEファイルを作成する"
+./scripts/ignite plan "READMEファイルを作成する"
 ```
 
 出力例:
@@ -56,13 +56,13 @@ bash scripts/ignite_plan.sh "READMEファイルを作成する"
 
 目標: READMEファイルを作成する
 
-✓ メッセージを作成しました: workspace/queue/leader/user_goal_1738315200.yaml
+✓ メッセージを作成しました: workspace/queue/leader/user_goal_1738315200123456.yaml
 
 ✓ タスク 'READMEファイルを作成する' を投入しました
 
 次のステップ:
   1. ダッシュボード確認: cat workspace/dashboard.md
-  2. ステータス確認: bash scripts/ignite_status.sh
+  2. ステータス確認: ./scripts/ignite status
   3. tmuxセッション表示: tmux attach -t ignite-session
 ```
 
@@ -91,10 +91,10 @@ watch -n 5 cat workspace/dashboard.md
 - ⏸ Innovator (恵那ツムギ): 待機中
 
 ## IGNITIANS状態
-- ✓ IGNITIAN-0: タスク完了 (README骨組み作成)
-- ⏳ IGNITIAN-1: 実行中 (インストール手順作成)
-- ⏳ IGNITIAN-2: 実行中 (使用例作成)
-- ⏸ IGNITIAN-3~7: 待機中
+- ✓ IGNITIAN-1: タスク完了 (README骨組み作成)
+- ⏳ IGNITIAN-2: 実行中 (インストール手順作成)
+- ⏳ IGNITIAN-3: 実行中 (使用例作成)
+- ⏸ IGNITIAN-4~8: 待機中
 
 ## タスク進捗
 - 完了: 1 / 3
@@ -103,8 +103,8 @@ watch -n 5 cat workspace/dashboard.md
 
 ## 最新ログ
 [17:05:23] [義賀リオ] タスク分解を完了しました。論理的に3つのフェーズに分割しました。
-[17:06:00] [通瀬アイナ] IGNITIAN-0, 1, 2にタスクを割り当てました。順調に進んでいます。
-[17:08:12] [IGNITIAN-0] README骨組みの作成が完了しました。
+[17:06:00] [通瀬アイナ] IGNITIAN-1, 2, 3にタスクを割り当てました。順調に進んでいます。
+[17:08:12] [IGNITIAN-1] README骨組みの作成が完了しました。
 [17:09:30] [通瀬アイナ] 進捗: 1/3完了。このペースで続けましょう。
 ```
 
@@ -123,7 +123,7 @@ tmux attach -t ignite-session
 **5. ステータス確認**
 
 ```bash
-bash scripts/ignite_status.sh
+./scripts/ignite status
 ```
 
 出力例:
@@ -146,7 +146,9 @@ bash scripts/ignite_status.sh
   evaluator: 1 メッセージ
   coordinator: 0 メッセージ
   innovator: 0 メッセージ
-  ignitians: 0 メッセージ
+  ignitian_1: 0 メッセージ
+  ignitian_2: 0 メッセージ
+  ignitian_3: 0 メッセージ
 
 === レポート ===
   完了レポート: 3 件
@@ -163,7 +165,7 @@ cat README.md
 **7. システム停止**
 
 ```bash
-bash scripts/ignite_stop.sh
+./scripts/ignite stop
 ```
 
 ---
@@ -179,15 +181,15 @@ bash scripts/ignite_stop.sh
 **1. システム起動**
 
 ```bash
-bash scripts/ignite_start.sh
+./scripts/ignite start
 ```
 
 **2. 分析タスク投入**
 
 ```bash
-bash scripts/ignite_plan.sh \
+./scripts/ignite plan \
   "プロジェクト全体を分析して改善提案を作成する" \
-  "パフォーマンス、コード品質、保守性の観点から"
+  -c "パフォーマンス、コード品質、保守性の観点から"
 ```
 
 **3. プロセス**
@@ -198,19 +200,19 @@ bash scripts/ignite_plan.sh \
 2. **Strategist** が分析戦略を立案（どの領域を重点的に分析するか）
 3. **Architect** が現在の設計を評価
 4. **Coordinator** が分析タスクを IGNITIANS に配分:
-   - IGNITIAN-0: コードベースの構造分析
-   - IGNITIAN-1: パフォーマンスボトルネック検出
-   - IGNITIAN-2: コード品質チェック
-   - IGNITIAN-3: 依存関係分析
+   - IGNITIAN-1: コードベースの構造分析
+   - IGNITIAN-2: パフォーマンスボトルネック検出
+   - IGNITIAN-3: コード品質チェック
+   - IGNITIAN-4: 依存関係分析
 5. **Evaluator** が分析結果を評価
 6. **Innovator** が改善提案を作成
 7. **Leader** が提案をまとめてユーザーに報告
 
 **4. 結果確認**
 
-分析結果は以下に記録されます:
-- `workspace/queue/coordinator/` - 各IGNITIANの完了レポート
+分析結果は以下で確認できます:
 - `workspace/dashboard.md` - 進捗と概要
+- `workspace/logs/` - 各エージェントのログ
 - Innovatorからの改善提案メッセージ
 
 ---
@@ -226,15 +228,15 @@ bash scripts/ignite_plan.sh \
 **1. システム起動**
 
 ```bash
-bash scripts/ignite_start.sh
+./scripts/ignite start
 ```
 
 **2. 実装タスク投入**
 
 ```bash
-bash scripts/ignite_plan.sh \
+./scripts/ignite plan \
   "タスク管理CLIツールを実装する" \
-  "コマンド: add, list, complete, delete。YAMLファイルでデータ保存"
+  -c "コマンド: add, list, complete, delete。YAMLファイルでデータ保存"
 ```
 
 **3. IGNITIANs数の調整（オプション）**
@@ -249,8 +251,8 @@ ignitians:
 
 再起動:
 ```bash
-bash scripts/ignite_stop.sh
-bash scripts/ignite_start.sh
+./scripts/ignite stop
+./scripts/ignite start
 ```
 
 **4. プロセス**
@@ -267,10 +269,10 @@ bash scripts/ignite_start.sh
    - データモデル
 
 3. **Coordinator** がタスクを配分:
-   - IGNITIAN-0: プロジェクト構造作成
-   - IGNITIAN-1: データモデル実装
-   - IGNITIAN-2: CLI引数パーサー実装
-   - IGNITIAN-3: タスク追加機能実装
+   - IGNITIAN-1: プロジェクト構造作成
+   - IGNITIAN-2: データモデル実装
+   - IGNITIAN-3: CLI引数パーサー実装
+   - IGNITIAN-4: タスク追加機能実装
    - etc.
 
 4. **Evaluator** が各実装を検証
@@ -321,15 +323,15 @@ ignitians:
 **2. システム起動**
 
 ```bash
-bash scripts/ignite_start.sh
+./scripts/ignite start
 ```
 
 **3. データ処理タスク投入**
 
 ```bash
-bash scripts/ignite_plan.sh \
+./scripts/ignite plan \
   "data/ディレクトリ内の全JSONファイルを処理して集計する" \
-  "各ファイルのidフィールドをカウント、結果をsummary.jsonに出力"
+  -c "各ファイルのidフィールドをカウント、結果をsummary.jsonに出力"
 ```
 
 **4. プロセス**
@@ -354,14 +356,14 @@ cat summary.json
 
 **良い例:**
 ```bash
-bash scripts/ignite_plan.sh \
+./scripts/ignite plan \
   "READMEファイルを作成する" \
-  "プロジェクト概要、インストール手順、使用例を含める"
+  -c "プロジェクト概要、インストール手順、使用例を含める"
 ```
 
 **悪い例:**
 ```bash
-bash scripts/ignite_plan.sh "ドキュメント作成"
+./scripts/ignite plan "ドキュメント作成"
 # → 曖昧すぎて、何を作成すべきか不明
 ```
 
@@ -425,14 +427,14 @@ tmux attach -t ignite-session
 
 キューをクリア:
 ```bash
-rm workspace/queue/*/pending_*.yaml
+rm workspace/queue/*/*.yaml
 ```
 
 ### エラーメッセージが出る
 
-完了レポートを確認:
+ログを確認:
 ```bash
-cat workspace/queue/coordinator/task_completed_*.yaml | grep error
+grep -i error workspace/logs/*.log
 ```
 
 ### システムが起動しない
@@ -440,7 +442,7 @@ cat workspace/queue/coordinator/task_completed_*.yaml | grep error
 既存セッションを削除:
 ```bash
 tmux kill-session -t ignite-session
-bash scripts/ignite_start.sh
+./scripts/ignite start
 ```
 
 ---

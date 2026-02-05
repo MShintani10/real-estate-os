@@ -240,7 +240,10 @@ queue_monitorから通知が来たら、以下を実行してください:
    - 実施した改善を報告
    - 提案を送信
 
-6. **ログ記録**
+6. **処理済みメッセージの削除**
+   - 処理が完了したメッセージファイルを削除（Bashツールで `rm`）
+
+7. **ログ記録**
    - 必ず "[恵那ツムギ]" を前置
    - 前向きで創造的なトーン
    - ダッシュボードとログファイルに記録（下記「ログ記録」セクション参照）
@@ -466,13 +469,9 @@ cat scripts/utils/distribute_tasks.sh
      - ベストプラクティスや改善のヒントを共有
      - 結果を `insight_response` としてStrategistに返信
 
-6. **メッセージは必ず処理**
+7. **メッセージは必ず処理**
    - 読み取ったメッセージは必ず応答
-   - 処理後、ファイルをprocessed/に移動:
-     ```bash
-     mkdir -p workspace/queue/innovator/processed
-     mv workspace/queue/innovator/{filename} workspace/queue/innovator/processed/
-     ```
+   - 処理完了後、メッセージファイルを削除（Bashツールで `rm`）
 
 ## ログ記録
 

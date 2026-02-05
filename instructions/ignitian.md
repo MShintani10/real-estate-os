@@ -31,7 +31,7 @@ IGNITEメンバーへの呼び方（敬愛を込めて）:
 ## あなたの責務
 
 1. **タスク割り当ての受信**
-   - `workspace/queue/ignitians/ignitian_{n}.yaml` であなた宛てのタスクを受信
+   - `workspace/queue/ignitian_{n}/` であなた宛てのタスクを受信
    - タスクの内容と要件を理解
 
 2. **タスクの実行**
@@ -53,7 +53,7 @@ IGNITEメンバーへの呼び方（敬愛を込めて）:
 ## 通信プロトコル
 
 ### 受信先
-- `workspace/queue/ignitians/ignitian_{n}.yaml` - あなた宛てのタスク割り当て
+- `workspace/queue/ignitian_{n}/` - あなた宛てのタスク割り当て（アンダースコア形式。ハイフン `ignitian-N` ではない）
 
 ### 送信先
 - `workspace/queue/coordinator/task_completed_{timestamp}.yaml` - タスク完了レポート
@@ -158,13 +158,13 @@ queue_monitorから通知が来たら、以下を実行してください:
 
 4. **完了レポート送信**
    - タスク完了時にレポートを作成
-   - `workspace/queue/coordinator/task_completed_$(date +%s).yaml` に送信
+   - `workspace/queue/coordinator/task_completed_$(date +%s%6N).yaml` に送信
    - `status: queued` を設定（queue_monitorがCoordinatorに通知）
 
 5. **タスクファイルの削除**
    - 処理済みタスクファイルを削除
    ```bash
-   rm workspace/queue/ignitians/ignitian_{n}.yaml
+   rm workspace/queue/ignitian_{n}/task_assignment_*.yaml
    ```
 
 6. **ログ記録**
@@ -175,7 +175,7 @@ queue_monitorから通知が来たら、以下を実行してください:
 
 ## 禁止事項
 
-- **自発的なキューポーリング**: `workspace/queue/ignitians/` を定期的にチェックしない
+- **自発的なキューポーリング**: `workspace/queue/ignitian_{n}/` を定期的にチェックしない
 - **待機ループの実行**: 「通知を待つ」ためのループを実行しない
 - **Globによる定期チェック**: 定期的にGlobでキューを検索しない
 
@@ -231,7 +231,7 @@ content: |
 
 **4. レポート送信**
 ```bash
-cat > workspace/queue/coordinator/task_completed_$(date +%s).yaml <<EOF
+cat > workspace/queue/coordinator/task_completed_$(date +%s%6N).yaml <<EOF
 type: task_completed
 from: ignitian_1
 to: coordinator
@@ -253,7 +253,7 @@ EOF
 
 **5. タスクファイル削除**
 ```bash
-rm workspace/queue/ignitians/ignitian_1.yaml
+rm workspace/queue/ignitian_1/task_assignment_*.yaml
 ```
 
 **6. ログ出力**
@@ -375,7 +375,7 @@ sed -i '/^## 最新ログ$/a\['"$TIME"'] [IGNITIAN-{n}] メッセージ' workspa
 
 **2. ログファイルに追記:**
 ```bash
-echo "[$(date -Iseconds)] メッセージ" >> workspace/logs/ignitian-{n}.log
+echo "[$(date -Iseconds)] メッセージ" >> workspace/logs/ignitian_{n}.log
 ```
 
 ※ `{n}` はあなたに割り当てられた番号に置き換えてください。

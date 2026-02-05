@@ -116,11 +116,13 @@ sequenceDiagram
 
 | ステータス | 意味 | 使用タイミング |
 |------------|------|----------------|
-| `queued` | キュー待ち | 新規メッセージ作成時（送信時） |
-| `processing` | 処理中 | queue_monitorが通知後に自動設定 |
-| `completed` | 処理完了 | 受信側が処理完了後に設定（または削除/移動） |
+| `queued` | キュー待ち | エージェント間メッセージ作成時（queue_monitor経由で通知） |
+| `processing` | 処理中 | queue_monitorが通知後に自動設定、またはCLIが直接通知時に初期設定 |
 
-**重要**: キューに新しいメッセージを送信する場合、常に `status: queued` を使用する。
+**ステータスの使い分け:**
+- **エージェント間通信**: `status: queued` で作成 → queue_monitorが検知・通知・`processing`に変更
+- **CLI直接通知**（plan/notify/work-on/start）: `status: processing` で作成 → CLIがtmux経由で直接通知
+- **処理完了後**: エージェントがファイルを削除（ステータスを変更するのではなくファイル自体を削除）
 
 ### YAMLメッセージ形式
 
@@ -134,7 +136,7 @@ timestamp: {ISO8601}
 priority: {high|normal|low}
 payload:
   {key}: {value}
-status: {queued|processing|completed}
+status: {queued|processing}
 ```
 
 ### 主要メッセージタイプ
@@ -160,10 +162,7 @@ status: {queued|processing|completed}
 ```
 ignite/
 ├── scripts/              # 起動・制御スクリプト
-│   ├── ignite_start.sh   # システム起動
-│   ├── ignite_plan.sh    # タスク投入
-│   ├── ignite_status.sh  # ステータス確認
-│   ├── ignite_stop.sh    # システム停止
+│   ├── ignite            # 統合CLI（start/plan/status/stop等）
 │   └── utils/            # ユーティリティ
 │
 ├── instructions/         # システムプロンプト
@@ -211,7 +210,7 @@ Window: ignite
 └─────────────────────────────────────────┘
 ┌────┬────┬────┬────┬────┬────┬────┬─────┐
 │ P6 │ P7 │ P8 │ P9 │P10 │P11 │P12 │P13..│
-│IG0 │IG1 │IG2 │IG3 │IG4 │IG5 │IG6 │IG7..│
+│IG1 │IG2 │IG3 │IG4 │IG5 │IG6 │IG7 │IG8..│
 └────┴────┴────┴────┴────┴────┴────┴─────┘
 ```
 
@@ -233,7 +232,7 @@ claude-code --dangerously-skip-permissions
 
 1. **ユーザーがタスクを投入**
    ```bash
-   bash scripts/ignite_plan.sh "READMEファイルを作成する"
+   ./scripts/ignite plan "READMEファイルを作成する"
    ```
 
 2. **Leaderが受信・理解**
@@ -294,7 +293,7 @@ Coordinatorが以下を考慮してタスク配分:
 
 1. `instructions/{role}.md` を作成
 2. `config/agents.yaml` に設定追加
-3. `scripts/ignite_start.sh` で起動処理追加
+3. `scripts/ignite` の `cmd_start()` に起動処理追加
 
 ### 新しいメッセージタイプの追加
 
@@ -305,9 +304,9 @@ Coordinatorが以下を考慮してタスク配分:
 ## パフォーマンス最適化
 
 ### メッセージキューの効率化
-- 定期的なポーリング（30秒間隔）
+- 定期的なポーリング（デフォルト10秒間隔）
 - ファイルシステムベースのシンプルな実装
-- 将来的にはinotifyなどのイベント駆動も検討
+- PROCESSED_FILESの定期クリーンアップによるメモリ管理
 
 ### 並列実行の最大化
 - 依存関係のないタスクは完全並列
@@ -336,7 +335,7 @@ Coordinatorが以下を考慮してタスク配分:
 
 ### ステータス確認
 ```bash
-bash scripts/ignite_status.sh
+./scripts/ignite status
 ```
 
 ### tmuxセッション確認

@@ -5,7 +5,7 @@
 set -e
 set -u
 
-VERSION="0.1.10"
+VERSION="0.1.11"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
@@ -219,6 +219,9 @@ start_ignitian() {
     local max_retries=3
     local retry=0
 
+    # IGNITIANキューディレクトリを作成
+    mkdir -p "$WORKSPACE_DIR/queue/ignitian_${id}"
+
     while [[ $retry -lt $max_retries ]]; do
         print_info "IGNITIAN-${id} を起動中... (試行 $((retry+1))/$max_retries)"
 
@@ -241,7 +244,7 @@ start_ignitian() {
         if tmux list-panes -t "$SESSION_NAME:ignite" 2>/dev/null | grep -q "$pane:"; then
             # システムプロンプト読み込み（絶対パスを使用）
             tmux send-keys -t "$SESSION_NAME:ignite.$pane" \
-                "$IGNITE_INSTRUCTIONS_DIR/ignitian.md を読んで、あなたはIGNITIAN-${id}として振る舞ってください。ワークスペースは $WORKSPACE_DIR です。$WORKSPACE_DIR/queue/ignitians/ignitian_${id}.yaml を監視してください。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に読み替えてください。"
+                "$IGNITE_INSTRUCTIONS_DIR/ignitian.md を読んで、あなたはIGNITIAN-${id}として振る舞ってください。ワークスペースは $WORKSPACE_DIR です。$WORKSPACE_DIR/queue/ignitian_${id}/ ディレクトリを監視してください。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に読み替えてください。"
             sleep 0.3
             tmux send-keys -t "$SESSION_NAME:ignite.$pane" C-m
             sleep 2  # プロンプト送信後の安定待機
@@ -376,7 +379,8 @@ cmd_start() {
 
     # workspaceの初期化
     print_info "workspaceを初期化中..."
-    mkdir -p "$WORKSPACE_DIR/queue"/{leader,strategist,architect,evaluator,coordinator,innovator,ignitians}
+    mkdir -p "$WORKSPACE_DIR/queue"/{leader,strategist,architect,evaluator,coordinator,innovator}
+    # IGNITIANキューは起動時に動的作成（数が設定依存のため）
     mkdir -p "$WORKSPACE_DIR/context"
     mkdir -p "$WORKSPACE_DIR/logs"
     mkdir -p "$WORKSPACE_DIR/state"  # Watcher用ステートファイル保存先
@@ -444,7 +448,8 @@ EOF
 
     # 初期メッセージの送信
     print_info "Leaderに初期化メッセージを送信中..."
-    cat > "$WORKSPACE_DIR/queue/leader/system_init_$(date +%s).yaml" <<EOF
+    local init_message_file="$WORKSPACE_DIR/queue/leader/system_init_$(date +%s%6N).yaml"
+    cat > "$init_message_file" <<EOF
 type: system_init
 from: system
 to: leader
@@ -453,7 +458,7 @@ priority: high
 payload:
   message: "システムが起動しました。初期化を完了してください。"
   action: "initialize_dashboard"
-status: pending
+status: processing
 EOF
 
     echo ""
@@ -582,7 +587,7 @@ EOF
         echo "" >> "$WORKSPACE_DIR/costs/sessions.yaml"
         echo "ignitians:" >> "$WORKSPACE_DIR/costs/sessions.yaml"
         for ((i=1; i<=actual_ignitian_count; i++)); do
-            local pane=$((6 + i - 1))
+            local pane=$((5 + i))
             cat >> "$WORKSPACE_DIR/costs/sessions.yaml" <<EOF
   ignitian_${i}:
     pane: ${pane}
@@ -759,9 +764,40 @@ cmd_notify() {
     if [[ -z "$target" ]] || [[ -z "$message" ]]; then
         print_error "ターゲットとメッセージを指定してください"
         echo "使用方法: ./scripts/ignite notify <target> \"message\""
-        echo "ターゲット: leader, strategist, architect, evaluator, coordinator, innovator, ignitians"
+        echo "ターゲット: leader, strategist, architect, evaluator, coordinator, innovator, ignitian_{n}"
         exit 1
     fi
+
+    # ターゲットの正規化（ハイフン形式をアンダースコア形式に）
+    case "$target" in
+        ignitian-*)
+            target="${target//-/_}"
+            ;;
+    esac
+
+    # ペイン番号を特定
+    local pane_num=""
+    case "$target" in
+        leader) pane_num=0 ;;
+        strategist) pane_num=1 ;;
+        architect) pane_num=2 ;;
+        evaluator) pane_num=3 ;;
+        coordinator) pane_num=4 ;;
+        innovator) pane_num=5 ;;
+        ignitian_*)
+            local num=${target#ignitian_}
+            if [[ ! "$num" =~ ^[0-9]+$ ]]; then
+                print_error "無効なIGNITIANターゲット: $target"
+                exit 1
+            fi
+            pane_num=$((num + 5))
+            ;;
+        *)
+            print_error "不明なターゲット: $target"
+            echo "有効なターゲット: leader, strategist, architect, evaluator, coordinator, innovator, ignitian_{n}"
+            exit 1
+            ;;
+    esac
 
     if ! session_exists; then
         print_error "セッション '$SESSION_NAME' が見つかりません"
@@ -771,11 +807,20 @@ cmd_notify() {
         exit 1
     fi
 
+    # ペインの存在確認
+    local pane_count
+    pane_count=$(tmux list-panes -t "$SESSION_NAME:ignite" 2>/dev/null | wc -l)
+    if [[ "$pane_num" -ge "$pane_count" ]]; then
+        print_error "ターゲット '${target}' のペイン (${pane_num}) が存在しません（ペイン数: ${pane_count}）"
+        exit 1
+    fi
+
     cd "$WORKSPACE_DIR"
 
     # メッセージファイル作成
     local timestamp=$(date -Iseconds)
-    local message_id=$(date +%s%N)
+    local message_id=$(date +%s%6N)
+    local escaped_message="${message//\"/\\\"}"
     local message_file="$WORKSPACE_DIR/queue/${target}/notify_${message_id}.yaml"
 
     mkdir -p "$WORKSPACE_DIR/queue/${target}"
@@ -787,23 +832,11 @@ to: ${target}
 timestamp: "${timestamp}"
 priority: normal
 payload:
-  message: "${message}"
-status: pending
+  message: "${escaped_message}"
+status: processing
 EOF
 
     print_success "メッセージを送信しました: $message_file"
-
-    # ペイン番号を特定して通知
-    local pane_num=0
-    case "$target" in
-        leader) pane_num=0 ;;
-        strategist) pane_num=1 ;;
-        architect) pane_num=2 ;;
-        evaluator) pane_num=3 ;;
-        coordinator) pane_num=4 ;;
-        innovator) pane_num=5 ;;
-        ignitians) pane_num=6 ;;  # 最初のIGNITIANに送信
-    esac
 
     tmux send-keys -t "$SESSION_NAME:ignite.$pane_num" \
         "$WORKSPACE_DIR/queue/${target}/ に新しいメッセージがあります。確認してください。" Enter
@@ -1122,12 +1155,14 @@ cmd_plan() {
 
     # タイムスタンプとメッセージID生成
     local timestamp=$(date -Iseconds)
-    local message_id=$(date +%s)
+    local message_id=$(date +%s%6N)
+    local escaped_goal="${goal//\"/\\\"}"
 
     # Leaderへメッセージ送信
     local message_file="$WORKSPACE_DIR/queue/leader/user_goal_${message_id}.yaml"
 
     if [[ -n "$context" ]]; then
+        local escaped_context="${context//\"/\\\"}"
         cat > "$message_file" <<EOF
 type: user_goal
 from: user
@@ -1135,9 +1170,9 @@ to: leader
 timestamp: "${timestamp}"
 priority: high
 payload:
-  goal: "${goal}"
-  context: "${context}"
-status: pending
+  goal: "${escaped_goal}"
+  context: "${escaped_context}"
+status: processing
 EOF
     else
         cat > "$message_file" <<EOF
@@ -1147,8 +1182,8 @@ to: leader
 timestamp: "${timestamp}"
 priority: high
 payload:
-  goal: "${goal}"
-status: pending
+  goal: "${escaped_goal}"
+status: processing
 EOF
     fi
 
@@ -1484,7 +1519,13 @@ cmd_clean() {
     print_info "workspaceをクリア中..."
 
     rm -rf "$WORKSPACE_DIR/queue"/*/
-    mkdir -p "$WORKSPACE_DIR/queue"/{leader,strategist,architect,evaluator,coordinator,innovator,ignitians}
+    mkdir -p "$WORKSPACE_DIR/queue"/{leader,strategist,architect,evaluator,coordinator,innovator}
+    # IGNITIANキューディレクトリの動的作成
+    local _worker_count
+    _worker_count=$(get_worker_count)
+    for i in $(seq 1 "$_worker_count"); do
+        mkdir -p "$WORKSPACE_DIR/queue/ignitian_${i}"
+    done
 
     rm -rf "$WORKSPACE_DIR/logs"/*
     rm -rf "$WORKSPACE_DIR/context"/*
@@ -2352,11 +2393,11 @@ cmd_help() {
             echo "  -h, --help             このヘルプを表示"
             echo ""
             echo "ターゲット:"
-            echo "  leader, strategist, architect, evaluator, coordinator, innovator, ignitians"
+            echo "  leader, strategist, architect, evaluator, coordinator, innovator, ignitian_{n}"
             echo ""
             echo "例:"
             echo "  ./scripts/ignite notify strategist \"戦略を立案してください\""
-            echo "  ./scripts/ignite notify ignitians \"タスク1を実行\" -s proj-a"
+            echo "  ./scripts/ignite notify ignitian_1 \"タスク1を実行\" -s proj-a"
             ;;
         list)
             echo "使用方法: ./scripts/ignite list"
@@ -2415,7 +2456,7 @@ cmd_help() {
             echo "  -h, --help             このヘルプを表示"
             echo ""
             echo "エージェント:"
-            echo "  leader, strategist, architect, evaluator, coordinator, innovator, ignitians"
+            echo "  leader, strategist, architect, evaluator, coordinator, innovator, ignitians (全IGNITIAN)"
             echo ""
             echo "例:"
             echo "  ./scripts/ignite cost                    # 現在のセッションのコスト"
@@ -2588,7 +2629,7 @@ cmd_work_on() {
 
     # タイムスタンプとメッセージID生成
     local timestamp=$(date -Iseconds)
-    local message_id=$(date +%s%N)
+    local message_id=$(date +%s%6N)
 
     # github_taskメッセージを作成
     local message_file="$WORKSPACE_DIR/queue/leader/github_task_${message_id}.yaml"
@@ -2603,14 +2644,14 @@ payload:
   trigger: "implement"
   repository: ${repo}
   issue_number: ${issue_number}
-  issue_title: "${issue_title}"
+  issue_title: "${issue_title//\"/\\\"}"
   issue_body: |
 $(echo "$issue_body" | sed 's/^/    /')
   requested_by: user
   trigger_comment: "work-onコマンドによる手動トリガー"
   branch_prefix: "ignite/"
   url: "${issue_url}"
-status: pending
+status: processing
 EOF
 
     print_success "タスクメッセージを作成しました: $message_file"

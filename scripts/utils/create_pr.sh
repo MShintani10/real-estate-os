@@ -212,9 +212,8 @@ create_pull_request() {
     fi
 
     # トークン設定
-    local token_prefix=""
+    local bot_token=""
     if [[ "$use_bot" == "true" ]]; then
-        local bot_token
         # IGNITE_CONFIG_DIR が設定されていれば、github-app.yaml のパスを渡す
         # --repo オプションでリポジトリを指定（Organization対応）
         if [[ -n "${IGNITE_CONFIG_DIR:-}" ]]; then
@@ -222,34 +221,28 @@ create_pull_request() {
         else
             bot_token=$("${SCRIPT_DIR}/get_github_app_token.sh" --repo "$repo" 2>/dev/null || echo "")
         fi
-        if [[ -n "$bot_token" ]]; then
-            token_prefix="GH_TOKEN=$bot_token"
-        else
+        if [[ -z "$bot_token" ]]; then
             log_warn "Bot Token の取得に失敗しました。通常のトークンで作成します。"
         fi
     fi
 
     # PR作成
     local pr_url
-    if [[ -n "$token_prefix" ]]; then
-        pr_url=$(eval "$token_prefix gh pr create \
-            --repo \"$repo\" \
-            --title \"$title\" \
-            --body \"\$(cat <<'PREOF'
-$body
-PREOF
-)\" \
-            --base \"$base_branch\" \
-            --head \"$head_branch\" \
-            $draft_flag")
+    local -a gh_args=(
+        --repo "$repo"
+        --title "$title"
+        --body "$body"
+        --base "$base_branch"
+        --head "$head_branch"
+    )
+    if [[ "$is_draft" == "true" ]]; then
+        gh_args+=(--draft)
+    fi
+
+    if [[ -n "$bot_token" ]]; then
+        pr_url=$(GH_TOKEN="$bot_token" gh pr create "${gh_args[@]}")
     else
-        pr_url=$(gh pr create \
-            --repo "$repo" \
-            --title "$title" \
-            --body "$body" \
-            --base "$base_branch" \
-            --head "$head_branch" \
-            $draft_flag)
+        pr_url=$(gh pr create "${gh_args[@]}")
     fi
 
     echo "$pr_url"

@@ -512,7 +512,7 @@ create_event_message() {
     local event_data="$3"
 
     local timestamp=$(date -Iseconds)
-    local message_id=$(date +%s%N)
+    local message_id=$(date +%s%6N)
     local queue_dir="${WORKSPACE_DIR}/queue/leader"
 
     mkdir -p "$queue_dir"
@@ -539,7 +539,7 @@ payload:
   event_type: ${event_type}
   repository: ${repo}
   issue_number: ${issue_number}
-  issue_title: "${issue_title}"
+  issue_title: "${issue_title//\"/\\\"}"
   author: ${author}
   author_type: ${author_type}
   body: |
@@ -597,7 +597,7 @@ payload:
   event_type: ${event_type}
   repository: ${repo}
   pr_number: ${pr_number}
-  pr_title: "${pr_title}"
+  pr_title: "${pr_title//\"/\\\"}"
   author: ${author}
   author_type: ${author_type}
   head_ref: ${head_ref}
@@ -679,7 +679,7 @@ create_task_message() {
     local trigger_type="$4"
 
     local timestamp=$(date -Iseconds)
-    local message_id=$(date +%s%N)
+    local message_id=$(date +%s%6N)
     local queue_dir="${WORKSPACE_DIR}/queue/leader"
 
     mkdir -p "$queue_dir"
@@ -717,7 +717,7 @@ payload:
   trigger: "${trigger_type}"
   repository: ${repo}
   issue_number: ${issue_number}
-  issue_title: "${issue_title}"
+  issue_title: "${issue_title//\"/\\\"}"
   issue_body: |
 $(echo "$issue_body" | sed 's/^/    /')
   requested_by: ${author}

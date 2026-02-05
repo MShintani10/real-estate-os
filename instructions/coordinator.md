@@ -61,7 +61,8 @@ cat workspace/system_config.yaml
 - `workspace/queue/coordinator/` - あなた宛てのメッセージ
 
 ### 送信先
-- `workspace/queue/ignitians/ignitian_{n}.yaml` - 各IGNITIANへのタスク割り当て
+- `workspace/queue/ignitian_{n}/task_assignment_{timestamp}.yaml` - 各IGNITIANへのタスク割り当て
+  - **重要**: ディレクトリ名は必ずアンダースコア形式 `ignitian_N` を使用（ハイフン `ignitian-N` は不可）
 - `workspace/queue/leader/` - Leaderへの進捗報告
 - `workspace/queue/evaluator/` - Evaluatorへの評価依頼
 
@@ -157,6 +158,7 @@ queue_monitorから通知が来たら、以下を実行してください:
    - 通知で指定されたファイルをReadツールで読み込む
    - 利用可能なIGNITIANを特定
    - タスクを配分
+   - 処理済みメッセージファイルを削除（Bashツールで `rm`）
 
 2. **完了レポートの受信**
    - queue_monitorから `task_completed` メッセージの通知を受信
@@ -166,7 +168,7 @@ queue_monitorから通知が来たら、以下を実行してください:
    - 完了したタスクを記録
    - ダッシュボードを更新
    - 次のタスクを割り当て（依存関係を確認）
-   - 処理後、ファイルを `processed/` に移動
+   - 処理済みメッセージファイルを削除（Bashツールで `rm`）
 
 4. **ダッシュボード更新**
    - 進捗状況を反映
@@ -218,7 +220,7 @@ cat workspace/system_config.yaml
 
 4. **タスク割り当てメッセージを作成**
    ```bash
-   cat > workspace/queue/ignitians/ignitian_1.yaml <<EOF
+   cat > workspace/queue/ignitian_1/task_assignment_$(date +%s%6N).yaml <<EOF
    type: task_assignment
    from: coordinator
    to: ignitian_1
@@ -253,7 +255,7 @@ ignitians:
 
 1. **メッセージ受信**
    ```yaml
-   # workspace/queue/coordinator/task_list_123.yaml
+   # workspace/queue/coordinator/task_list_1738315260123456.yaml
    type: task_list
    from: strategist
    to: coordinator
@@ -275,7 +277,7 @@ ignitians:
 4. **割り当てメッセージ作成**
    ```bash
    for i in 1 2 3; do
-       cat > workspace/queue/ignitians/ignitian_${i}.yaml <<EOF
+       cat > workspace/queue/ignitian_${i}/task_assignment_$(date +%s%6N).yaml <<EOF
        ...
        EOF
    done
@@ -300,7 +302,7 @@ ignitians:
 
 1. **レポート検出**
    ```yaml
-   # workspace/queue/coordinator/task_completed_1738712345.yaml
+   # workspace/queue/coordinator/task_completed_1738712345123456.yaml
    type: task_completed
    from: ignitian_1
    to: coordinator
@@ -395,11 +397,7 @@ ignitians:
 
 6. **メッセージは必ず処理**
    - 読み取ったメッセージは必ず応答
-   - 処理後、ファイルをprocessed/に移動:
-     ```bash
-     mkdir -p workspace/queue/coordinator/processed
-     mv workspace/queue/coordinator/{filename} workspace/queue/coordinator/processed/
-     ```
+   - 処理完了後、メッセージファイルを削除（Bashツールで `rm`）
 
 ## ログ記録
 

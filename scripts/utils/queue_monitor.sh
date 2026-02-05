@@ -65,10 +65,10 @@ send_to_agent() {
     #   ペイン 5: Innovator (恵那ツムギ)
     #   ペイン 6+: IGNITIANs (ワーカー)
     #
-    # IGNITIANのペイン番号計算:
-    #   ignitian-0 → ペイン 6 (0 + 6)
-    #   ignitian-1 → ペイン 7 (1 + 6)
-    #   ignitian-N → ペイン N+6
+    # IGNITIANのペイン番号計算（IDは1始まり）:
+    #   ignitian-1 → ペイン 6 (1 + 5)
+    #   ignitian-2 → ペイン 7 (2 + 5)
+    #   ignitian-N → ペイン N+5
     # =========================================================================
     case "$agent" in
         leader) pane_index=0 ;;
@@ -94,7 +94,7 @@ send_to_agent() {
     if tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
         # ペインにメッセージを送信
         # 形式: session:window.pane (window は省略すると現在のウィンドウ)
-        local target="${TMUX_SESSION}:1.${pane_index}"
+        local target="${TMUX_SESSION}:ignite.${pane_index}"
 
         # メッセージを送信してからEnter（C-m）を送信
         # 少し間を置いてから送信することで確実に入力される
@@ -158,6 +158,20 @@ process_message() {
 # キュー監視
 # =============================================================================
 
+# PROCESSED_FILES のクリーンアップ（存在しないファイルのエントリを削除）
+cleanup_processed_files() {
+    local removed=0
+    for filepath in "${!PROCESSED_FILES[@]}"; do
+        if [[ ! -f "$filepath" ]]; then
+            unset 'PROCESSED_FILES[$filepath]'
+            ((removed++)) || true
+        fi
+    done
+    if [[ $removed -gt 0 ]]; then
+        log_info "PROCESSED_FILES クリーンアップ: ${removed}件削除（残: ${#PROCESSED_FILES[@]}件）"
+    fi
+}
+
 scan_queue() {
     local queue_dir="$1"
     local queue_name="$2"
@@ -195,6 +209,7 @@ scan_queue() {
 
 monitor_queues() {
     log_info "キュー監視を開始します（間隔: ${POLL_INTERVAL}秒）"
+    local poll_count=0
 
     while true; do
         # Leader キュー
@@ -207,96 +222,20 @@ monitor_queues() {
         scan_queue "$WORKSPACE_DIR/queue/coordinator" "coordinator"
         scan_queue "$WORKSPACE_DIR/queue/innovator" "innovator"
 
-        # IGNITIAN キュー（ignitians/ ディレクトリ方式）
-        # ファイル名 ignitian_N.yaml または ignitian_N_xxx.yaml からIGNITIAN番号を抽出
-        if [[ -d "$WORKSPACE_DIR/queue/ignitians" ]]; then
-            for file in "$WORKSPACE_DIR/queue/ignitians"/ignitian_*.yaml; do
-                [[ -f "$file" ]] || continue
-                local filepath="$file"
-                local filename=$(basename "$file")
+        # IGNITIAN キュー（個別ディレクトリ方式 - Sub-Leadersと同じパターン）
+        for ignitian_dir in "$WORKSPACE_DIR/queue"/ignitian[_-]*; do
+            [[ -d "$ignitian_dir" ]] || continue
+            local dirname=$(basename "$ignitian_dir")
+            scan_queue "$ignitian_dir" "$dirname"
+        done
 
-                # 既に処理済みならスキップ
-                if [[ -n "${PROCESSED_FILES[$filepath]:-}" ]]; then
-                    continue
-                fi
-
-                # statusがqueuedのものだけ処理
-                local status=$(grep -E '^status:' "$file" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
-                if [[ "$status" != "queued" ]]; then
-                    PROCESSED_FILES[$filepath]=1
-                    continue
-                fi
-
-                # ファイル名からIGNITIAN番号を抽出 (ignitian_N.yaml or ignitian_N_xxx.yaml)
-                if [[ "$filename" =~ ^ignitian_([0-9]+) ]]; then
-                    local ignitian_num=${BASH_REMATCH[1]}
-                    process_message "$file" "ignitian_${ignitian_num}"
-                    PROCESSED_FILES[$filepath]=1
-                    sed -i 's/^status: queued/status: processing/' "$file" 2>/dev/null || true
-                fi
-            done
+        # 定期的なメモリクリーンアップ（100ポーリングごと）
+        ((poll_count++)) || true
+        if (( poll_count % 100 == 0 )); then
+            cleanup_processed_files
         fi
 
         sleep "$POLL_INTERVAL"
-    done
-}
-
-# =============================================================================
-# inotifywait を使った効率的な監視（利用可能な場合）
-# =============================================================================
-
-monitor_with_inotify() {
-    if ! command -v inotifywait &> /dev/null; then
-        log_warn "inotifywait が見つかりません。ポーリングモードで起動します"
-        monitor_queues
-        return
-    fi
-
-    log_info "inotify モードでキュー監視を開始します"
-
-    # 監視対象ディレクトリを収集
-    local watch_dirs=()
-    [[ -d "$WORKSPACE_DIR/queue/leader" ]] && watch_dirs+=("$WORKSPACE_DIR/queue/leader")
-    [[ -d "$WORKSPACE_DIR/queue/strategist" ]] && watch_dirs+=("$WORKSPACE_DIR/queue/strategist")
-    [[ -d "$WORKSPACE_DIR/queue/architect" ]] && watch_dirs+=("$WORKSPACE_DIR/queue/architect")
-    [[ -d "$WORKSPACE_DIR/queue/evaluator" ]] && watch_dirs+=("$WORKSPACE_DIR/queue/evaluator")
-    [[ -d "$WORKSPACE_DIR/queue/coordinator" ]] && watch_dirs+=("$WORKSPACE_DIR/queue/coordinator")
-    [[ -d "$WORKSPACE_DIR/queue/innovator" ]] && watch_dirs+=("$WORKSPACE_DIR/queue/innovator")
-    # IGNITIAN キュー（ignitians/ ディレクトリ方式）
-    [[ -d "$WORKSPACE_DIR/queue/ignitians" ]] && watch_dirs+=("$WORKSPACE_DIR/queue/ignitians")
-
-    if [[ ${#watch_dirs[@]} -eq 0 ]]; then
-        log_error "監視対象のキューディレクトリがありません"
-        exit 1
-    fi
-
-    # inotifywait でファイル作成を監視
-    inotifywait -m -e create -e moved_to --format '%w%f' "${watch_dirs[@]}" 2>/dev/null | while read filepath; do
-        if [[ "$filepath" == *.yaml ]]; then
-            # ディレクトリ名からキュー名を取得
-            local queue_dir=$(dirname "$filepath")
-            local queue_name=$(basename "$queue_dir")
-            local filename=$(basename "$filepath")
-
-            # ignitians/ ディレクトリの場合はファイル名からIGNITIAN番号を抽出
-            if [[ "$queue_name" == "ignitians" ]]; then
-                if [[ "$filename" =~ ^ignitian_([0-9]+) ]]; then
-                    queue_name="ignitian_${BASH_REMATCH[1]}"
-                else
-                    continue  # IGNITIAN形式でないファイルはスキップ
-                fi
-            fi
-
-            # 少し待ってファイルが完全に書き込まれるのを待つ
-            sleep 0.5
-
-            # statusがqueuedか確認
-            local status=$(grep -E '^status:' "$filepath" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
-            if [[ "$status" == "queued" ]]; then
-                process_message "$filepath" "$queue_name"
-                sed -i 's/^status: queued/status: processing/' "$filepath" 2>/dev/null || true
-            fi
-        fi
     done
 }
 
@@ -314,7 +253,6 @@ show_help() {
 オプション:
   -s, --session <name>  tmux セッション名（必須）
   -i, --interval <sec>  ポーリング間隔（デフォルト: 10秒）
-  --inotify             inotify モードを使用（利用可能な場合）
   -h, --help            このヘルプを表示
 
 環境変数:
@@ -325,9 +263,6 @@ show_help() {
 例:
   # tmux セッション指定で起動
   ./scripts/utils/queue_monitor.sh -s ignite-1234
-
-  # inotify モードで起動
-  ./scripts/utils/queue_monitor.sh -s ignite-1234 --inotify
 EOF
 }
 
@@ -336,8 +271,6 @@ EOF
 # =============================================================================
 
 main() {
-    local use_inotify=false
-
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -s|--session)
@@ -347,10 +280,6 @@ main() {
             -i|--interval)
                 POLL_INTERVAL="$2"
                 shift 2
-                ;;
-            --inotify)
-                use_inotify=true
-                shift
                 ;;
             -h|--help)
                 show_help
@@ -379,11 +308,7 @@ main() {
 
     log_info "tmux セッション: $TMUX_SESSION"
 
-    if [[ "$use_inotify" == true ]]; then
-        monitor_with_inotify
-    else
-        monitor_queues
-    fi
+    monitor_queues
 }
 
 main "$@"

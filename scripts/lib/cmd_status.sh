@@ -1,0 +1,155 @@
+# lib/cmd_status.sh - statusコマンド
+[[ -n "${__LIB_CMD_STATUS_LOADED:-}" ]] && return; __LIB_CMD_STATUS_LOADED=1
+
+cmd_status() {
+    # オプション解析
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -s|--session)
+                SESSION_NAME="$2"
+                if [[ ! "$SESSION_NAME" =~ ^ignite- ]]; then
+                    SESSION_NAME="ignite-$SESSION_NAME"
+                fi
+                shift 2
+                ;;
+            -w|--workspace)
+                WORKSPACE_DIR="$2"
+                if [[ ! "$WORKSPACE_DIR" = /* ]]; then
+                    WORKSPACE_DIR="$(pwd)/$WORKSPACE_DIR"
+                fi
+                shift 2
+                ;;
+            -h|--help) cmd_help status; exit 0 ;;
+            *) print_error "Unknown option: $1"; cmd_help status; exit 1 ;;
+        esac
+    done
+
+    # セッション名とワークスペースを設定
+    setup_session_name
+    setup_workspace
+
+    cd "$WORKSPACE_DIR"
+
+    print_header "IGNITE システム状態"
+    echo ""
+    echo -e "${BLUE}セッション:${NC} $SESSION_NAME"
+    echo -e "${BLUE}ワークスペース:${NC} $WORKSPACE_DIR"
+    echo ""
+
+    # tmuxセッション確認
+    if session_exists; then
+        print_success "tmuxセッション: 実行中"
+
+        # ペイン数確認
+        local pane_count
+        pane_count=$(tmux list-panes -t "$SESSION_NAME" 2>/dev/null | wc -l)
+        echo -e "${BLUE}  ペイン数: ${pane_count}${NC}"
+
+        # エージェント構成の推定
+        echo ""
+        print_header "エージェント状態"
+        echo ""
+        echo -e "  ${GREEN}✓${NC} pane 0: Leader (伊羽ユイ)"
+
+        if [[ "$pane_count" -gt 1 ]]; then
+            local sub_count=$((pane_count > 6 ? 5 : pane_count - 1))
+            for i in $(seq 1 $sub_count); do
+                local idx=$((i - 1))
+                if [[ $idx -lt ${#SUB_LEADERS[@]} ]]; then
+                    echo -e "  ${GREEN}✓${NC} pane ${i}: ${SUB_LEADER_NAMES[$idx]} (${SUB_LEADERS[$idx]})"
+                fi
+            done
+        fi
+
+        if [[ "$pane_count" -gt 6 ]]; then
+            local ignitian_count=$((pane_count - 6))
+            for i in $(seq 1 $ignitian_count); do
+                local pane_num=$((5 + i))
+                echo -e "  ${GREEN}✓${NC} pane ${pane_num}: IGNITIAN-${i}"
+            done
+        fi
+    else
+        print_error "tmuxセッション: 停止"
+        exit 1
+    fi
+
+    echo ""
+
+    # ダッシュボード表示
+    if [[ -f "$WORKSPACE_DIR/dashboard.md" ]]; then
+        print_header "ダッシュボード"
+        echo ""
+        cat "$WORKSPACE_DIR/dashboard.md"
+        echo ""
+    else
+        print_warning "ダッシュボードが見つかりません"
+    fi
+
+    # キュー状態
+    print_header "キュー状態"
+    echo ""
+
+    for queue_dir in "$WORKSPACE_DIR/queue"/*; do
+        if [[ -d "$queue_dir" ]]; then
+            local queue_name=$(basename "$queue_dir")
+            local message_count=$(find "$queue_dir" -name "*.yaml" -type f 2>/dev/null | wc -l)
+
+            if [[ "$message_count" -gt 0 ]]; then
+                echo -e "${YELLOW}  $queue_name: $message_count メッセージ${NC}"
+            else
+                echo -e "${GREEN}  $queue_name: 0 メッセージ${NC}"
+            fi
+        fi
+    done
+
+    echo ""
+
+    # GitHub Watcher状態
+    print_header "GitHub Watcher"
+    if [[ -f "$WORKSPACE_DIR/github_watcher.pid" ]]; then
+        local watcher_pid=$(cat "$WORKSPACE_DIR/github_watcher.pid")
+        if kill -0 "$watcher_pid" 2>/dev/null; then
+            print_success "GitHub Watcher: 実行中 (PID: $watcher_pid)"
+        else
+            print_warning "GitHub Watcher: 停止（PIDファイルあり）"
+        fi
+    else
+        print_info "GitHub Watcher: 未起動"
+    fi
+
+    # キューモニター状態
+    print_header "キューモニター"
+    if [[ -f "$WORKSPACE_DIR/queue_monitor.pid" ]]; then
+        local queue_pid=$(cat "$WORKSPACE_DIR/queue_monitor.pid")
+        if kill -0 "$queue_pid" 2>/dev/null; then
+            print_success "キューモニター: 実行中 (PID: $queue_pid)"
+        else
+            print_warning "キューモニター: 停止（PIDファイルあり）"
+        fi
+    else
+        print_info "キューモニター: 未起動"
+    fi
+    echo ""
+
+    # 最新ログ
+    print_header "最新ログ (直近5件)"
+    echo ""
+
+    if [[ -d "$WORKSPACE_DIR/logs" ]] && [[ "$(ls -A "$WORKSPACE_DIR/logs" 2>/dev/null)" ]]; then
+        for log_file in "$WORKSPACE_DIR/logs"/*.log; do
+            if [[ -f "$log_file" ]]; then
+                echo -e "${BLUE}$(basename "$log_file"):${NC}"
+                tail -n 5 "$log_file" 2>/dev/null | sed 's/^/  /'
+                echo ""
+            fi
+        done
+    else
+        print_warning "ログファイルなし"
+        echo ""
+    fi
+
+    print_header "コマンド"
+    echo -e "  ダッシュボード監視: ${YELLOW}watch -n 5 cat $WORKSPACE_DIR/dashboard.md${NC}"
+    echo -e "  tmuxアタッチ: ${YELLOW}./scripts/ignite attach -s $SESSION_NAME${NC}"
+    echo -e "  システム停止: ${YELLOW}./scripts/ignite stop -s $SESSION_NAME${NC}"
+}

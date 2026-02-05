@@ -155,11 +155,11 @@ EOF
 
     # ペインボーダーにキャラクター名を常時表示
     tmux set-option -t "$SESSION_NAME" pane-border-status top
-    tmux set-option -t "$SESSION_NAME" pane-border-format " #{pane_title} "
+    tmux set-option -t "$SESSION_NAME" pane-border-format " #{@agent_name} "
 
     # Leader ペイン (pane 0)
     print_info "Leader ($LEADER_NAME) を起動中..."
-    tmux select-pane -t "$SESSION_NAME:ignite.0" -T "$LEADER_NAME (Leader)"
+    tmux set-option -t "$SESSION_NAME:ignite.0" -p @agent_name "$LEADER_NAME (Leader)"
     tmux send-keys -t "$SESSION_NAME:ignite" \
         "cd '$WORKSPACE_DIR' && claude --model claude-opus-4-5-20251101 --dangerously-skip-permissions" Enter
 

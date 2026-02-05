@@ -26,7 +26,7 @@ start_agent() {
         # ペイン作成
         tmux split-window -t "$SESSION_NAME:ignite" -h
         tmux select-layout -t "$SESSION_NAME:ignite" tiled
-        tmux select-pane -t "$SESSION_NAME:ignite.$pane" -T "${name} (${role^})"
+        tmux set-option -t "$SESSION_NAME:ignite.$pane" -p @agent_name "${name} (${role^})"
 
         # Claude CLI 起動（ワークスペースディレクトリで実行）
         tmux send-keys -t "$SESSION_NAME:ignite.$pane" \
@@ -76,7 +76,7 @@ start_ignitian() {
         # ペイン作成
         tmux split-window -t "$SESSION_NAME:ignite" -h
         tmux select-layout -t "$SESSION_NAME:ignite" tiled
-        tmux select-pane -t "$SESSION_NAME:ignite.$pane" -T "IGNITIAN-${id}"
+        tmux set-option -t "$SESSION_NAME:ignite.$pane" -p @agent_name "IGNITIAN-${id}"
 
         # IGNITE_WORKER_ID を設定して Claude CLI 起動（per-IGNITIAN リポジトリ分離用）
         tmux send-keys -t "$SESSION_NAME:ignite.$pane" \

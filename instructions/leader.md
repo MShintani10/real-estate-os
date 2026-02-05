@@ -118,6 +118,7 @@ claude codeのビルトインツールを使用できます:
      - `progress_update`: Coordinatorからの進捗報告
      - `github_event`: GitHub Watcherからのイベント通知（Issue/PR/コメント）
      - `github_task`: GitHub Watcherからのタスクリクエスト（メンショントリガー）
+     - `system_init`: システム起動時の初期化メッセージ。初期化完了を確認し、メッセージファイルを削除する（ダッシュボード初期化はLeader起動時に実施済みのため二重初期化は行わない）
    - 処理完了したメッセージファイルは削除（Bashツールで `rm`）
 
 3. **意思決定と指示**

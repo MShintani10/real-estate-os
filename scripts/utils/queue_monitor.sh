@@ -82,7 +82,7 @@ send_to_agent() {
             # ignitian-N または ignitian_N 形式に対応
             if [[ "$agent" =~ ^ignitian[-_]([0-9]+)$ ]]; then
                 local num=${BASH_REMATCH[1]}
-                pane_index=$((num + 6))  # Sub-Leaders(6) + IGNITIAN番号
+                pane_index=$((num + 5))  # Sub-Leaders(0-5) + IGNITIAN番号(1始まり) = 5 + num
             else
                 log_warn "未知のエージェント: $agent"
                 return 1

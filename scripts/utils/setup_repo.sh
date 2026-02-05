@@ -196,7 +196,8 @@ setup_repo() {
         git pull origin "$branch" || log_warn "pull に失敗しました（ローカル変更がある可能性）"
     else
         # per-IGNITIAN clone: primary clone が存在すればローカルから高速clone
-        local repo_name=$(echo "$repo" | tr '/' '_')
+        local repo_name
+        repo_name=$(echo "$repo" | tr '/' '_')
         local primary_path="$REPOS_DIR/$repo_name"
         if [[ -n "${IGNITE_WORKER_ID:-}" ]] && [[ -d "$primary_path/.git" ]]; then
             log_info "primary clone からローカルclone: $repo (worker ${IGNITE_WORKER_ID})"

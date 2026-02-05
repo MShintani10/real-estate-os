@@ -35,5 +35,3 @@ jobs:
           scandir: './scripts'
           severity: warning
           format: tty
-        env:
-          SHELLCHECK_OPTS: -e SC1091 -e SC2034

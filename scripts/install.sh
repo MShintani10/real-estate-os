@@ -246,7 +246,8 @@ install_data() {
     if [[ -d "$source_lib" ]]; then
         mkdir -p "$DATA_DIR/scripts/lib"
         cp "$source_lib"/*.sh "$DATA_DIR/scripts/lib/"
-        local count=$(ls -1 "$DATA_DIR/scripts/lib"/*.sh 2>/dev/null | wc -l)
+        local count
+        count=$(ls -1 "$DATA_DIR/scripts/lib"/*.sh 2>/dev/null | wc -l)
         if [[ "$UPGRADE" == "true" ]]; then
             print_success "scripts/lib ($count モジュール) を $DATA_DIR/scripts/lib にアップグレードしました"
         else

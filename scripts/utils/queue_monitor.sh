@@ -165,8 +165,10 @@ process_message() {
 # 正規化が不要な場合はそのままのパスを返す
 normalize_filename() {
     local file="$1"
-    local filename=$(basename "$file")
-    local dir=$(dirname "$file")
+    local filename
+    filename=$(basename "$file")
+    local dir
+    dir=$(dirname "$file")
 
     # {任意の文字列}_{数字16桁}.yaml パターンに一致すれば正規化不要
     if [[ "$filename" =~ ^.+_[0-9]{16}\.yaml$ ]]; then
@@ -175,20 +177,24 @@ normalize_filename() {
     fi
 
     # YAMLから type と timestamp を読み取り
-    local msg_type=$(grep -E '^type:' "$file" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
+    local msg_type
+    msg_type=$(grep -E '^type:' "$file" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
     if [[ -z "$msg_type" ]]; then
         # type フィールドがない場合はファイル名からベスト・エフォートで推測
         msg_type="${filename%.yaml}"
     fi
 
     # YAML timestamp からエポックマイクロ秒を算出（元の時系列順を保持）
-    local yaml_ts=$(grep -E '^timestamp:' "$file" 2>/dev/null | head -1 | sed 's/^timestamp: *"\?\([^"]*\)"\?/\1/')
+    local yaml_ts
+    yaml_ts=$(grep -E '^timestamp:' "$file" 2>/dev/null | head -1 | sed 's/^timestamp: *"\?\([^"]*\)"\?/\1/')
     local epoch_usec=""
     if [[ -n "$yaml_ts" ]]; then
-        local epoch_sec=$(date -d "$yaml_ts" +%s 2>/dev/null)
+        local epoch_sec
+        epoch_sec=$(date -d "$yaml_ts" +%s 2>/dev/null)
         if [[ -n "$epoch_sec" ]]; then
             # マイクロ秒部分はファイルのハッシュから生成（ユニーク性確保）
-            local micro=$(echo "${file}${yaml_ts}" | md5sum | tr -dc '0-9' | head -c 6)
+            local micro
+            micro=$(echo "${file}${yaml_ts}" | md5sum | tr -dc '0-9' | head -c 6)
             epoch_usec="${epoch_sec}${micro}"
         fi
     fi
@@ -207,8 +213,10 @@ normalize_filename() {
         new_path="${dir}/${msg_type}_${epoch_usec}_${suffix}.yaml"
     fi
 
-    local from=$(grep -E '^from:' "$file" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
-    local to=$(grep -E '^to:' "$file" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
+    local from
+    from=$(grep -E '^from:' "$file" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
+    local to
+    to=$(grep -E '^to:' "$file" 2>/dev/null | head -1 | awk '{print $2}' | tr -d '"')
     log_warn "ファイル名を正規化: ${filename} → $(basename "$new_path") (from: ${from:-unknown}, to: ${to:-unknown})"
 
     mv "$file" "$new_path" 2>/dev/null || { echo "$file"; return; }
@@ -232,7 +240,8 @@ scan_queue() {
         file=$(normalize_filename "$file")
         [[ -f "$file" ]] || continue
 
-        local filename=$(basename "$file")
+        local filename
+        filename=$(basename "$file")
         local dest="$queue_dir/processed/$filename"
 
         # at-most-once 配信: 先に processed/ へ移動し、成功した場合のみ処理
@@ -260,7 +269,8 @@ monitor_queues() {
         # IGNITIAN キュー（個別ディレクトリ方式 - Sub-Leadersと同じパターン）
         for ignitian_dir in "$WORKSPACE_DIR/queue"/ignitian[_-]*; do
             [[ -d "$ignitian_dir" ]] || continue
-            local dirname=$(basename "$ignitian_dir")
+            local dirname
+            dirname=$(basename "$ignitian_dir")
             scan_queue "$ignitian_dir" "$dirname"
         done
 

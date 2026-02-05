@@ -106,7 +106,8 @@ copy_main_script() {
 
     # scripts/lib/ モジュール
     cp "$SCRIPT_DIR/lib"/*.sh "$BUILD_DIR/share/scripts/lib/"
-    local count=$(ls -1 "$BUILD_DIR/share/scripts/lib"/*.sh 2>/dev/null | wc -l)
+    local count
+    count=$(ls -1 "$BUILD_DIR/share/scripts/lib"/*.sh 2>/dev/null | wc -l)
     print_success "$count 個の lib モジュールをコピーしました"
 }
 

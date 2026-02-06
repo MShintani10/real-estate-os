@@ -2,7 +2,7 @@
 # lib/core.sh - 定数・カラー定義・出力ヘルパー
 [[ -n "${__LIB_CORE_LOADED:-}" ]] && return; __LIB_CORE_LOADED=1
 
-VERSION="0.1.16"
+VERSION="0.1.17"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
@@ -47,6 +47,7 @@ SUB_LEADER_NAMES=("義賀リオ" "祢音ナナ" "衣結ノア" "通瀬アイナ"
 LEADER_NAME="伊羽ユイ"
 
 # デフォルト設定
+DEFAULT_MODEL="claude-opus-4-6"
 DEFAULT_WORKER_COUNT=8
 
 # Claude セッションデータのパス（PROJECT_ROOT から動的に生成）

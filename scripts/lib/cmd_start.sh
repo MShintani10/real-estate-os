@@ -162,7 +162,7 @@ EOF
     print_info "Leader ($LEADER_NAME) を起動中..."
     tmux set-option -t "$SESSION_NAME:ignite.0" -p @agent_name "$LEADER_NAME (Leader)"
     tmux send-keys -t "$SESSION_NAME:ignite" \
-        "cd '$WORKSPACE_DIR' && claude --model claude-opus-4-5-20251101 --dangerously-skip-permissions" Enter
+        "cd '$WORKSPACE_DIR' && CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --model $DEFAULT_MODEL --dangerously-skip-permissions --teammate-mode in-process" Enter
 
     # 起動待機（確認プロンプト表示を待つ）
     print_warning "Leaderの起動を待機中... (3秒)"

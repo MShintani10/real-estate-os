@@ -32,7 +32,7 @@ start_agent() {
 
         # Claude CLI 起動（ワークスペースディレクトリで実行）
         tmux send-keys -t "$SESSION_NAME:ignite.$pane" \
-            "cd '$WORKSPACE_DIR' && claude --model claude-opus-4-5-20251101 --dangerously-skip-permissions" Enter
+            "cd '$WORKSPACE_DIR' && CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --model $DEFAULT_MODEL --dangerously-skip-permissions --teammate-mode in-process" Enter
         sleep 3
 
         # 権限確認通過
@@ -82,7 +82,7 @@ start_ignitian() {
 
         # IGNITE_WORKER_ID を設定して Claude CLI 起動（per-IGNITIAN リポジトリ分離用）
         tmux send-keys -t "$SESSION_NAME:ignite.$pane" \
-            "export IGNITE_WORKER_ID=${id} && cd '$WORKSPACE_DIR' && claude --model claude-opus-4-5-20251101 --dangerously-skip-permissions" Enter
+            "export IGNITE_WORKER_ID=${id} && cd '$WORKSPACE_DIR' && CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --model $DEFAULT_MODEL --dangerously-skip-permissions --teammate-mode in-process" Enter
         sleep 3
 
         # 権限確認通過

@@ -3,7 +3,15 @@
 # 参照: https://docs.anthropic.com/en/docs/about-claude/pricing
 
 models:
-  # Claude Opus 4.5 (最新)
+  # Claude Opus 4.6 (最新)
+  claude-opus-4-6:
+    name: "Claude Opus 4.6"
+    input_per_1m_tokens: 5.00
+    output_per_1m_tokens: 25.00
+    cache_read_per_1m_tokens: 0.50
+    cache_creation_per_1m_tokens: 6.25
+
+  # Claude Opus 4.5
   claude-opus-4-5-20251101:
     name: "Claude Opus 4.5"
     input_per_1m_tokens: 5.00
@@ -44,5 +52,5 @@ models:
     cache_creation_per_1m_tokens: 1.25
 
 defaults:
-  model: "claude-opus-4-5-20251101"
+  model: "claude-opus-4-6"
   exchange_rate_jpy: 150.0

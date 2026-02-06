@@ -15,11 +15,14 @@ load_pricing() {
         return 1
     fi
 
-    # デフォルトモデルの料金を取得
-    PRICE_INPUT=$(grep -A5 "claude-opus-4-5-20251101:" "$pricing_file" | grep "input_per_1m_tokens:" | awk '{print $2}')
-    PRICE_OUTPUT=$(grep -A5 "claude-opus-4-5-20251101:" "$pricing_file" | grep "output_per_1m_tokens:" | awk '{print $2}')
-    PRICE_CACHE_READ=$(grep -A5 "claude-opus-4-5-20251101:" "$pricing_file" | grep "cache_read_per_1m_tokens:" | awk '{print $2}')
-    PRICE_CACHE_CREATE=$(grep -A5 "claude-opus-4-5-20251101:" "$pricing_file" | grep "cache_creation_per_1m_tokens:" | awk '{print $2}')
+    # デフォルトモデルの料金を取得（pricing.yaml の defaults.model から動的取得）
+    local default_model
+    default_model=$(grep -A1 "^defaults:" "$pricing_file" | grep "model:" | awk '{print $2}' | tr -d '"')
+    default_model=${default_model:-claude-opus-4-6}
+    PRICE_INPUT=$(grep -A5 "${default_model}:" "$pricing_file" | grep "input_per_1m_tokens:" | head -1 | awk '{print $2}')
+    PRICE_OUTPUT=$(grep -A5 "${default_model}:" "$pricing_file" | grep "output_per_1m_tokens:" | head -1 | awk '{print $2}')
+    PRICE_CACHE_READ=$(grep -A5 "${default_model}:" "$pricing_file" | grep "cache_read_per_1m_tokens:" | head -1 | awk '{print $2}')
+    PRICE_CACHE_CREATE=$(grep -A5 "${default_model}:" "$pricing_file" | grep "cache_creation_per_1m_tokens:" | head -1 | awk '{print $2}')
     EXCHANGE_RATE=$(grep "exchange_rate_jpy:" "$pricing_file" | awk '{print $2}')
 
     # デフォルト値 (Claude Opus 4.5)

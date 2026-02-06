@@ -32,11 +32,14 @@ claude --version
 # tmux
 tmux -V
 
+# gh (GitHub CLI)
+gh --version
+
 # bash（通常は標準でインストール済み）
 bash --version
 ```
 
-### インストール
+### 前提ソフトウェアのインストール
 
 claudeがインストールされていない場合：
 ```bash
@@ -52,13 +55,72 @@ sudo apt install tmux
 brew install tmux
 ```
 
+ghがインストールされていない場合：
+```bash
+# 公式サイト: https://cli.github.com/
+
+# Ubuntu/Debian
+sudo apt install gh
+
+# macOS
+brew install gh
+```
+
+## 📦 インストール
+
+### GitHub Releaseからインストール（推奨）
+
+```bash
+# 最新リリースをダウンロード
+gh release download --repo myfinder/IGNITE --pattern '*.tar.gz'
+
+# 展開
+tar xzf ignite-*.tar.gz
+
+# インストール
+./install.sh
+```
+
+インストール先：
+- `~/.local/bin/` — 実行ファイル (`ignite` コマンド)
+- `~/.config/ignite/` — 設定ファイル
+- `~/.local/share/ignite/` — データファイル（instructions、scripts等）
+
+> **Note**: `~/.local/bin` が PATH に含まれていない場合は、以下を `~/.bashrc` または `~/.zshrc` に追加してください：
+> ```bash
+> export PATH="$HOME/.local/bin:$PATH"
+> ```
+
+> **Note**: 現在 Linux のみ対応しています。macOS ユーザーは「開発モード（ソースから実行）」を参照してください。
+
+### アップグレード
+
+```bash
+gh release download --repo myfinder/IGNITE --pattern '*.tar.gz'
+tar xzf ignite-*.tar.gz
+./install.sh --upgrade
+```
+
+`--upgrade` オプションでは設定ファイルは保持され、実行ファイルとデータのみが更新されます。
+
+### 開発モード（ソースから実行）
+
+リポジトリをクローンして直接実行する場合：
+
+```bash
+git clone https://github.com/myfinder/IGNITE.git
+cd IGNITE
+./scripts/ignite start
+```
+
+開発モードでは `./scripts/ignite` を使用します。インストール後は `ignite` コマンドが利用可能です。
+
 ## 🚀 クイックスタート
 
 ### 1. システム起動
 
 ```bash
-cd /path/to/ignite
-./scripts/ignite start
+ignite start
 ```
 
 初回起動時は自動的に：
@@ -72,21 +134,21 @@ cd /path/to/ignite
 **オプション:**
 ```bash
 # 起動後に自動アタッチしない
-./scripts/ignite start --no-attach
+ignite start --no-attach
 
 # 既存セッションを強制終了して再起動
-./scripts/ignite start -f
+ignite start -f
 
 # セッションIDとワークスペースを指定して起動
-./scripts/ignite start -s my-session -w /path/to/workspace
+ignite start -s my-session -w /path/to/workspace
 
 # GitHub Watcherも一緒に起動
-./scripts/ignite start --with-watcher
+ignite start --with-watcher
 
 # Leaderオンリーモード（単独モード）で起動
-./scripts/ignite start -a leader
+ignite start -a leader
 # または
-./scripts/ignite start --agents leader
+ignite start --agents leader
 ```
 
 `-s`/`--session` と `-w`/`--workspace` オプションを使用することで、複数のプロジェクトを並行して実行できます。詳細は「複数プロジェクトの並行実行」セクションを参照してください。
@@ -98,12 +160,12 @@ cd /path/to/ignite
 別のターミナル、またはtmuxセッションをデタッチ（`Ctrl+b d`）してから：
 
 ```bash
-./scripts/ignite plan "READMEファイルを作成する"
+ignite plan "READMEファイルを作成する"
 ```
 
 コンテキストを追加する場合：
 ```bash
-./scripts/ignite plan "READMEファイルを作成する" -c "プロジェクト概要、インストール方法、使用例を含める"
+ignite plan "READMEファイルを作成する" -c "プロジェクト概要、インストール方法、使用例を含める"
 ```
 
 ### 3. 進捗を確認
@@ -111,17 +173,17 @@ cd /path/to/ignite
 #### ステータスコマンドで確認（推奨）
 
 ```bash
-./scripts/ignite status
+ignite status
 ```
 
 #### ダッシュボードで確認
 
 ```bash
 # ステータスコマンドで確認（推奨）
-./scripts/ignite status
+ignite status
 
 # リアルタイム監視（ワークスペースがカスタムの場合はパスを調整）
-watch -n 5 ./scripts/ignite status
+watch -n 5 ignite status
 
 # または直接ダッシュボードファイルを表示
 cat workspace/dashboard.md
@@ -131,19 +193,19 @@ cat workspace/dashboard.md
 
 ```bash
 # 最新ログを表示
-./scripts/ignite logs
+ignite logs
 
 # リアルタイム監視
-./scripts/ignite logs -f
+ignite logs -f
 
 # 行数を指定
-./scripts/ignite logs -n 50
+ignite logs -n 50
 ```
 
 #### tmuxセッションで直接確認
 
 ```bash
-./scripts/ignite attach
+ignite attach
 ```
 
 各ペインで各エージェントの動作をリアルタイムで確認できます。
@@ -151,23 +213,23 @@ cat workspace/dashboard.md
 ### 4. システム停止
 
 ```bash
-./scripts/ignite stop
+ignite stop
 
 # 確認をスキップ
-./scripts/ignite stop -y
+ignite stop -y
 ```
 
 ### 5. コスト確認
 
 ```bash
 # トークン消費量と費用を表示
-./scripts/ignite cost
+ignite cost
 
 # 詳細表示（IGNITIANs個別表示）
-./scripts/ignite cost -d
+ignite cost -d
 
 # JSON形式で出力
-./scripts/ignite cost -j
+ignite cost -j
 ```
 
 **表示例:**
@@ -188,10 +250,10 @@ cat workspace/dashboard.md
 ### 6. workspaceクリア
 
 ```bash
-./scripts/ignite clean
+ignite clean
 
 # 確認をスキップ
-./scripts/ignite clean -y
+ignite clean -y
 ```
 
 ## 🏗 システム構造
@@ -412,20 +474,20 @@ ignite/
 
 | コマンド | 説明 | 例 |
 |---------|------|-----|
-| `start` | システム起動 | `./scripts/ignite start` |
-| `stop` | システム停止 | `./scripts/ignite stop` |
-| `plan` | タスク投入 | `./scripts/ignite plan "目標"` |
-| `status` | 状態確認 | `./scripts/ignite status` |
-| `attach` | tmuxセッションに接続 | `./scripts/ignite attach` |
-| `logs` | ログ表示 | `./scripts/ignite logs` |
-| `clean` | workspaceクリア | `./scripts/ignite clean` |
-| `cost` | トークン消費量・費用を表示 | `./scripts/ignite cost` |
-| `work-on` | Issue番号を指定して実装開始 | `./scripts/ignite work-on 123 --repo owner/repo` |
-| `watcher` | GitHub Watcherを管理 | `./scripts/ignite watcher start` |
-| `list` | セッション一覧表示 | `./scripts/ignite list` |
-| `help` | ヘルプ表示 | `./scripts/ignite help` |
+| `start` | システム起動 | `ignite start` |
+| `stop` | システム停止 | `ignite stop` |
+| `plan` | タスク投入 | `ignite plan "目標"` |
+| `status` | 状態確認 | `ignite status` |
+| `attach` | tmuxセッションに接続 | `ignite attach` |
+| `logs` | ログ表示 | `ignite logs` |
+| `clean` | workspaceクリア | `ignite clean` |
+| `cost` | トークン消費量・費用を表示 | `ignite cost` |
+| `work-on` | Issue番号を指定して実装開始 | `ignite work-on 123 --repo owner/repo` |
+| `watcher` | GitHub Watcherを管理 | `ignite watcher start` |
+| `list` | セッション一覧表示 | `ignite list` |
+| `help` | ヘルプ表示 | `ignite help` |
 
-詳細なヘルプは `./scripts/ignite help <command>` で確認できます。
+詳細なヘルプは `ignite help <command>` で確認できます。
 
 ### 複数プロジェクトの並行実行
 
@@ -433,25 +495,25 @@ ignite/
 
 ```bash
 # プロジェクトAを起動
-./scripts/ignite start -s proj-a -w /tmp/workspace-a
+ignite start -s proj-a -w /tmp/workspace-a
 
 # プロジェクトBを別セッションで起動
-./scripts/ignite start -s proj-b -w /tmp/workspace-b
+ignite start -s proj-b -w /tmp/workspace-b
 
 # セッション一覧を確認
-./scripts/ignite list
+ignite list
 
 # 各プロジェクトにタスクを投入
-./scripts/ignite plan "機能A" -s proj-a -w /tmp/workspace-a
-./scripts/ignite plan "機能B" -s proj-b -w /tmp/workspace-b
+ignite plan "機能A" -s proj-a -w /tmp/workspace-a
+ignite plan "機能B" -s proj-b -w /tmp/workspace-b
 
 # 各プロジェクトの状態確認
-./scripts/ignite status -s proj-a -w /tmp/workspace-a
-./scripts/ignite status -s proj-b -w /tmp/workspace-b
+ignite status -s proj-a -w /tmp/workspace-a
+ignite status -s proj-b -w /tmp/workspace-b
 
 # 各プロジェクトに接続
-./scripts/ignite attach -s proj-a
-./scripts/ignite attach -s proj-b
+ignite attach -s proj-a
+ignite attach -s proj-b
 ```
 
 **注意事項:**
@@ -465,9 +527,9 @@ Sub-LeadersやIGNITIANSを起動せず、Leaderのみでタスクを処理する
 
 ```bash
 # Leaderオンリーモードで起動
-./scripts/ignite start -a leader
+ignite start -a leader
 # または
-./scripts/ignite start --agents leader
+ignite start --agents leader
 ```
 
 **ユースケース:**
@@ -500,7 +562,7 @@ Sub-LeadersやIGNITIANSを起動せず、Leaderのみでタスクを処理する
 #### 1. ドキュメント作成
 
 ```bash
-./scripts/ignite plan "プロジェクトのドキュメントを作成する"
+ignite plan "プロジェクトのドキュメントを作成する"
 ```
 
 **処理フロー:**
@@ -514,7 +576,7 @@ Sub-LeadersやIGNITIANSを起動せず、Leaderのみでタスクを処理する
 #### 2. コード実装
 
 ```bash
-./scripts/ignite plan "タスク管理CLIツールを実装する" -c "add, list, complete, deleteコマンド。データはYAMLで保存"
+ignite plan "タスク管理CLIツールを実装する" -c "add, list, complete, deleteコマンド。データはYAMLで保存"
 ```
 
 **処理フロー:**
@@ -528,7 +590,7 @@ Sub-LeadersやIGNITIANSを起動せず、Leaderのみでタスクを処理する
 #### 3. データ分析
 
 ```bash
-./scripts/ignite plan "プロジェクトのコードベースを分析して改善点を洗い出す"
+ignite plan "プロジェクトのコードベースを分析して改善点を洗い出す"
 ```
 
 **処理フロー:**
@@ -562,8 +624,8 @@ ignitians:
 
 変更後はシステムを再起動:
 ```bash
-./scripts/ignite stop -y
-./scripts/ignite start
+ignite stop -y
+ignite start
 ```
 
 ### tmuxセッションの操作
@@ -572,7 +634,7 @@ ignitians:
 
 ```bash
 # セッションにアタッチ（推奨）
-./scripts/ignite attach
+ignite attach
 
 # または直接tmuxコマンドを使用（セッション名は起動時に指定した名前）
 tmux attach -t ignite-session
@@ -606,16 +668,16 @@ q                 # スクロールモード終了
 
 ```bash
 # 全体のヘルプ
-./scripts/ignite help
-./scripts/ignite --help
+ignite help
+ignite --help
 
 # コマンド別のヘルプ
-./scripts/ignite help start
-./scripts/ignite help plan
-./scripts/ignite start --help
+ignite help start
+ignite help plan
+ignite start --help
 
 # バージョン確認
-./scripts/ignite --version
+ignite --version
 ```
 
 ### ダッシュボードの見方
@@ -671,7 +733,7 @@ q                 # スクロールモード終了
 tmux ls
 
 # 強制的に再起動
-./scripts/ignite start -f
+ignite start -f
 ```
 
 **原因2: claudeが見つからない**
@@ -699,10 +761,10 @@ brew install tmux
 
 ```bash
 # ステータスでキュー状態を確認
-./scripts/ignite status
+ignite status
 
 # メッセージがある場合、そのエージェントのペインを確認
-./scripts/ignite attach
+ignite attach
 # 該当ペインに移動してログを確認
 ```
 
@@ -710,27 +772,27 @@ brew install tmux
 
 ```bash
 # ログをリアルタイム監視
-./scripts/ignite logs -f
+ignite logs -f
 
 # または一度に表示
-./scripts/ignite logs -n 50
+ignite logs -n 50
 ```
 
 **原因3: 依存関係でブロックされている**
 
 ```bash
 # ステータスで依存関係を確認
-./scripts/ignite status
+ignite status
 ```
 
 ### IGNITIANSが応答しない
 
 ```bash
 # ステータスでキュー状態を確認
-./scripts/ignite status
+ignite status
 
 # 該当するIGNITIANのペインを確認
-./scripts/ignite attach
+ignite attach
 Ctrl+b q    # ペイン番号を確認
 Ctrl+b q 6  # IGNITIAN-1のペインへ移動
 ```
@@ -759,10 +821,10 @@ EOF
 
 ```bash
 # workspaceをクリア（注意: 処理中のタスクも削除されます）
-./scripts/ignite clean
+ignite clean
 
 # 確認なしでクリア
-./scripts/ignite clean -y
+ignite clean -y
 ```
 
 ## 📊 通信プロトコル
@@ -804,12 +866,12 @@ payload:                     # メッセージ本体
 
 **良い例:**
 ```bash
-./scripts/ignite plan "ユーザー認証機能を実装する" -c "JWT認証、/login, /logout, /refresh エンドポイント、セッション管理"
+ignite plan "ユーザー認証機能を実装する" -c "JWT認証、/login, /logout, /refresh エンドポイント、セッション管理"
 ```
 
 **悪い例:**
 ```bash
-./scripts/ignite plan "認証"
+ignite plan "認証"
 # → 何をすべきか不明確
 ```
 
@@ -818,7 +880,7 @@ payload:                     # メッセージ本体
 タスクが複雑な場合、`-c` オプションでコンテキストを提供:
 
 ```bash
-./scripts/ignite plan "パフォーマンスを改善する" -c "データベースクエリの最適化、キャッシュの導入、N+1問題の解決"
+ignite plan "パフォーマンスを改善する" -c "データベースクエリの最適化、キャッシュの導入、N+1問題の解決"
 ```
 
 ### 3. 適切な並列数の選択
@@ -833,13 +895,13 @@ payload:                     # メッセージ本体
 
 ```bash
 # ステータスを確認
-./scripts/ignite status
+ignite status
 
 # 5秒ごとにステータスを監視
-watch -n 5 ./scripts/ignite status
+watch -n 5 ignite status
 
 # ログをリアルタイム監視
-./scripts/ignite logs -f
+ignite logs -f
 ```
 
 ### 5. ログの活用
@@ -848,13 +910,13 @@ watch -n 5 ./scripts/ignite status
 
 ```bash
 # 最新ログを表示
-./scripts/ignite logs
+ignite logs
 
 # リアルタイム監視
-./scripts/ignite logs -f
+ignite logs -f
 
 # 多くの行を表示
-./scripts/ignite logs -n 100
+ignite logs -n 100
 ```
 
 ## 📚 さらに詳しく

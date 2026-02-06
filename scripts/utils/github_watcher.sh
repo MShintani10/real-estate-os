@@ -217,7 +217,7 @@ expand_patterns() {
         while IFS= read -r repo; do
             [[ -z "$repo" ]] && continue
             local repo_name="${repo#*/}"
-            # bash glob マッチング（引用符なしで展開）
+            # shellcheck disable=SC2053  # 意図的な glob マッチング
             if [[ "$repo_name" == $name_pattern ]]; then
                 # 重複チェック
                 local dup=false

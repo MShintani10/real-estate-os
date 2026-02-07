@@ -365,13 +365,21 @@ _generate_repo_report() {
     local db="$WORKSPACE_DIR/state/memory.db"
     local dashboard="$WORKSPACE_DIR/dashboard.md"
 
+    # Layer 1: 入力バリデーション（Defense in Depth）
+    if [[ ! "$repo" =~ ^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$ ]]; then
+        log_warn "Invalid repository format: $repo"
+        return 0
+    fi
+
     local task_lines=""
 
     # メインパス: SQLite tasksテーブルから直接取得
     if command -v sqlite3 &>/dev/null && [[ -f "$db" ]]; then
+        # Layer 2: SQLエスケープ（シングルクォート二重化）
+        local safe_repo="${repo//\'/\'\'}"
         local raw
         raw=$(sqlite3 "$db" \
-            "PRAGMA busy_timeout=5000; SELECT task_id, title, status FROM tasks WHERE repository='${repo}' AND status != 'completed' ORDER BY task_id;" 2>/dev/null \
+            "PRAGMA busy_timeout=5000; SELECT task_id, title, status FROM tasks WHERE repository='${safe_repo}' AND status != 'completed' ORDER BY task_id;" 2>/dev/null \
             | grep '|') || raw=""
         if [[ -n "$raw" ]]; then
             task_lines="| Task ID | Title | Status |"$'\n'

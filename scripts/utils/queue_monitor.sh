@@ -391,6 +391,9 @@ _generate_repo_report() {
     fi
 
     # フォールバック: SQLite不在またはクエリ結果が空の場合、dashboard.mdからawk抽出
+    # NOTE: フォールバック（awk）パスではリポジトリ別フィルタリングは不可
+    # （dashboard.md テーブルに repository 列がないため）。
+    # SQLiteパスが主、フォールバックは全タスクを表示。
     if [[ -z "$task_lines" ]] && [[ -f "$dashboard" ]]; then
         task_lines=$(awk '
             /^## 現在のタスク/ { in_section=1; next }

@@ -89,7 +89,7 @@ UPDATE tasks
 -- パターン3: issue{N}r{R}_task_* (より正確な抽出で上書き)
 UPDATE tasks
   SET issue_number = CAST(substr(task_id, 6, instr(substr(task_id, 6), 'r') - 1) AS INTEGER)
-  WHERE task_id LIKE 'issue%r%';
+  WHERE task_id GLOB 'issue[0-9]*r[0-9]*_task_*';
 
 -- パターン4: task_{M}_issue{N} (末尾からissue番号を抽出)
 UPDATE tasks

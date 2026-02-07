@@ -87,109 +87,10 @@ _validate_date() {
 }
 
 # =============================================================================
-# Bot Token 取得（comment_on_issue.sh と同じパターン）
+# Bot Token / GitHub API 共通関数の読み込み
 # =============================================================================
 
-BOT_TOKEN_MAX_RETRIES="${BOT_TOKEN_MAX_RETRIES:-3}"
-BOT_TOKEN_RETRY_DELAY="${BOT_TOKEN_RETRY_DELAY:-2}"
-BOT_TOKEN_CACHE_TTL="${BOT_TOKEN_CACHE_TTL:-3300}"
-
-_get_cache_dir() {
-    if [[ -n "${WORKSPACE_DIR:-}" ]]; then
-        echo "$WORKSPACE_DIR/state"
-    elif [[ -n "${IGNITE_WORKSPACE_DIR:-}" ]]; then
-        echo "$IGNITE_WORKSPACE_DIR/state"
-    else
-        echo "/tmp/ignite-token-cache"
-    fi
-}
-
-get_cached_bot_token() {
-    local repo="$1"
-    local cache_dir
-    cache_dir=$(_get_cache_dir)
-    local cache_key
-    cache_key=$(echo "$repo" | tr '/' '_')
-    local cache_file="$cache_dir/.bot_token_${cache_key}"
-
-    mkdir -p "$cache_dir"
-    chmod 700 "$cache_dir" 2>/dev/null || true
-
-    if [[ -f "$cache_file" ]]; then
-        local cached_at now remaining
-        cached_at=$(stat -c %Y "$cache_file" 2>/dev/null || stat -f %m "$cache_file" 2>/dev/null || echo 0)
-        now=$(date +%s)
-        remaining=$((BOT_TOKEN_CACHE_TTL - (now - cached_at)))
-
-        if (( remaining > 0 )); then
-            local cached_token
-            cached_token=$(cat "$cache_file" 2>/dev/null)
-            if [[ "$cached_token" == ghs_* ]]; then
-                log_info "キャッシュからBot Tokenを使用 (残り: ${remaining}秒)"
-                echo "$cached_token"
-                return 0
-            fi
-        else
-            rm -f "$cache_file"
-        fi
-    fi
-
-    local token
-    token=$(_get_bot_token_internal "$repo") || true
-
-    if [[ -n "$token" ]] && [[ "$token" == ghs_* ]]; then
-        echo "$token" > "$cache_file"
-        chmod 600 "$cache_file"
-        log_info "Bot Tokenを新規取得しキャッシュ (TTL: ${BOT_TOKEN_CACHE_TTL}秒)"
-        echo "$token"
-        return 0
-    fi
-
-    echo ""
-    return 1
-}
-
-_get_bot_token_internal() {
-    local repo="${1:-}"
-    local retry_count=0
-    local token=""
-    local last_error=""
-    local token_script="${SCRIPT_DIR}/get_github_app_token.sh"
-    local repo_option=""
-
-    if [[ -n "$repo" ]]; then
-        repo_option="--repo $repo"
-    fi
-
-    while [[ $retry_count -lt $BOT_TOKEN_MAX_RETRIES ]]; do
-        if [[ -n "${IGNITE_CONFIG_DIR:-}" ]]; then
-            token=$(IGNITE_GITHUB_CONFIG="${IGNITE_CONFIG_DIR}/github-app.yaml" "$token_script" $repo_option 2>&1)
-        else
-            token=$("$token_script" $repo_option 2>&1)
-        fi
-        local exit_code=$?
-
-        if [[ $exit_code -eq 0 ]] && [[ -n "$token" ]] && [[ "$token" == ghs_* ]]; then
-            echo "$token"
-            return 0
-        fi
-
-        last_error="$token"
-        retry_count=$((retry_count + 1))
-
-        if [[ $retry_count -lt $BOT_TOKEN_MAX_RETRIES ]]; then
-            log_warn "Bot Token取得失敗 (試行 $retry_count/$BOT_TOKEN_MAX_RETRIES)。${BOT_TOKEN_RETRY_DELAY}秒後にリトライ..."
-            sleep "$BOT_TOKEN_RETRY_DELAY"
-        fi
-    done
-
-    log_warn "Bot Token取得失敗 (全${BOT_TOKEN_MAX_RETRIES}回の試行が失敗)"
-    if [[ -n "$last_error" ]]; then
-        log_warn "最後のエラー: $last_error"
-    fi
-    echo ""
-    return 1
-}
+source "${SCRIPT_DIR}/github_helpers.sh"
 
 # =============================================================================
 # キャッシュ管理
@@ -251,29 +152,6 @@ _list_cached_repos() {
     cache=$(_read_cache)
     echo "$cache" | jq -r --arg date "$date" \
         'to_entries[] | select(.value[$date] != null) | .key'
-}
-
-# =============================================================================
-# GitHub API ヘルパー
-# =============================================================================
-
-_GH_API_BOT_WARNED=""
-_gh_api() {
-    local repo="$1"
-    shift
-
-    local bot_token
-    bot_token=$(get_cached_bot_token "$repo") || true
-
-    if [[ -n "$bot_token" ]] && [[ "$bot_token" == ghs_* ]]; then
-        GH_TOKEN="$bot_token" gh "$@"
-    else
-        if [[ -z "$_GH_API_BOT_WARNED" ]]; then
-            log_warn "Bot Token取得失敗。ユーザートークンで実行します。"
-            _GH_API_BOT_WARNED=1
-        fi
-        gh "$@"
-    fi
 }
 
 # =============================================================================

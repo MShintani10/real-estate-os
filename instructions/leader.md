@@ -116,6 +116,7 @@ claude codeのビルトインツールを使用できます:
      - `progress_update`: Coordinatorからの進捗報告
      - `github_event`: GitHub Watcherからのイベント通知（Issue/PR/コメント）
      - `github_task`: GitHub Watcherからのタスクリクエスト（メンショントリガー）
+     - `insight_result`: Innovatorからのメモリ分析結果
      - `system_init`: システム起動時の初期化メッセージ。初期化完了を確認し、メッセージファイルを削除する（ダッシュボード初期化はLeader起動時に実施済みのため二重初期化は行わない）
    - 処理完了したメッセージファイルは削除（Bashツールで `rm`）
 
@@ -354,7 +355,7 @@ from: github_watcher
 to: leader
 priority: high
 payload:
-  trigger: "implement"  # implement, review, explain
+  trigger: "implement"  # implement, review, explain, insights
   repository: owner/repo
   issue_number: 123
   issue_title: "機能リクエスト"
@@ -370,6 +371,7 @@ payload:
    - `implement`: Strategistに実装戦略を依頼 → IGNITIANsで実装 → PR作成
    - `review`: Evaluatorにレビューを依頼
    - `explain`: 説明を生成してGitHubにコメント
+   - `insights`: Innovatorにメモリ分析を依頼 → 改善Issue起票
 3. 実装完了後、`./scripts/utils/create_pr.sh` でPR作成
 4. 結果をBot名義でIssueにコメント
 
@@ -541,6 +543,75 @@ PRコメントで修正依頼が来た場合：
    ./scripts/utils/comment_on_issue.sh {pr_number} --repo {repository} --bot \
      --template success --context "修正が完了しました。再度ご確認ください。"
    ```
+
+### insights トリガー処理
+
+`@ignite-gh-app insights` でメモリ分析リクエストが来た場合：
+
+1. **受付応答を投稿**
+   ```bash
+   ./scripts/utils/comment_on_issue.sh {issue_number} --repo {repository} --bot --template acknowledge
+   ```
+
+2. **リポジトリをセットアップ**
+   ```bash
+   REPO_PATH=$(./scripts/utils/setup_repo.sh clone {repository})
+   ```
+   既にclone済みの場合はスキップされ、既存パスが返される。
+
+3. **Innovatorにメモリ分析を依頼**
+   ```yaml
+   # workspace/queue/innovator/memory_review_request_{timestamp}.yaml
+   type: memory_review_request
+   from: leader
+   to: innovator
+   timestamp: "{timestamp}"
+   priority: high
+   payload:
+     trigger_source:
+       repository: "{repository}"
+       issue_number: {issue_number}
+     repo_path: "{REPO_PATH}"
+     analysis_scope:
+       since: ""
+       types: [learning, error, observation]
+     target_repos:
+       ignite_repo: "myfinder/ignite"
+       work_repos: ["{repository}"]
+   ```
+
+4. **insight_result 受信後、完了コメント投稿**
+   ```bash
+   ./scripts/utils/comment_on_issue.sh {issue_number} --repo {repository} --bot \
+     --template success --context "メモリ分析が完了しました。{created_count}件のIssueを起票し、{commented_count}件の既存Issueにコメントを追加しました。"
+   ```
+
+### insight_result 受信処理
+
+Innovatorからの `insight_result` を受信したら：
+
+```yaml
+type: insight_result
+from: innovator
+to: leader
+payload:
+  trigger_source:
+    repository: "owner/repo"
+    issue_number: N
+  results:
+    - action: "created"
+      repository: "owner/repo"
+      issue_number: 42
+      title: "改善提案タイトル"
+    - action: "commented"
+      repository: "owner/repo"
+      issue_number: 10
+  summary: "3件のメモリから2件の改善Issueを起票しました"
+```
+
+**処理:**
+1. `trigger_source` のIssue/PRにBot名義で結果サマリーをコメント投稿
+2. ダッシュボードに記録
 
 ### review トリガー処理
 

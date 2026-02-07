@@ -97,6 +97,13 @@ triggers:
       - "解説して"
       - "教えて"
 
+    # メモリ分析（Insights）をトリガーするキーワード
+    insights:
+      - "インサイト"
+      - "insights"
+      - "insight"
+      - "メモリ分析"
+
   # 自動トリガー（ラベルベース）
   # これらのラベルが付いた Issue は自動的に処理対象になります
   auto_labels:

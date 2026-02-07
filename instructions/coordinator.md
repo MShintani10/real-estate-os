@@ -180,6 +180,15 @@ IGNITIANにタスクを割り当てる際、tasks テーブルに記録します
 sqlite3 workspace/state/memory.db "PRAGMA busy_timeout=5000; INSERT INTO tasks (task_id, assigned_to, delegated_by, status, title, repository, issue_number, started_at) VALUES ('{task_id}', 'ignitian_{n}', 'coordinator', 'in_progress', '{title}', '{repository}', {issue_number}, datetime('now','+9 hours'));"
 ```
 
+repository / issue_number が不明な場合は NULL（クォートなしリテラル）を使用します:
+
+```bash
+# NULLケース: リポジトリやIssue番号が紐づかないタスク
+sqlite3 workspace/state/memory.db "PRAGMA busy_timeout=5000; INSERT INTO tasks (task_id, assigned_to, delegated_by, status, title, repository, issue_number, started_at) VALUES ('{task_id}', 'ignitian_{n}', 'coordinator', 'in_progress', '{title}', NULL, NULL, datetime('now','+9 hours'));"
+```
+
+> **注意**: `NULL` はSQLリテラルです。`'NULL'`（クォート付き）は文字列 "NULL" になるため使用しないでください。
+
 #### タスク完了更新
 IGNITIANから完了レポートを受信したら、tasks テーブルを更新します:
 

@@ -144,21 +144,22 @@ install_binary() {
 
     mkdir -p "$BIN_DIR"
 
-    local source_bin="$SCRIPT_DIR/bin/ignite"
-    if [[ ! -f "$source_bin" ]]; then
-        # 開発モード: scripts/ignite を使用
-        source_bin="$SCRIPT_DIR/ignite"
-    fi
-
-    if [[ ! -f "$source_bin" ]]; then
-        print_error "ignite 実行ファイルが見つかりません"
-        return 1
-    fi
-
     if [[ -f "$BIN_DIR/ignite" ]] && [[ "$FORCE" != "true" ]] && [[ "$UPGRADE" != "true" ]]; then
         print_warning "$BIN_DIR/ignite は既に存在します (--upgrade または --force で上書き)"
     else
-        cp "$source_bin" "$BIN_DIR/ignite"
+        # bin/ignite は薄いラッパー: 本体は DATA_DIR/scripts/ignite に委譲
+        local source_bin="$SCRIPT_DIR/bin/ignite"
+        if [[ -f "$source_bin" ]]; then
+            cp "$source_bin" "$BIN_DIR/ignite"
+        else
+            # 開発モード: ラッパーを生成
+            cat > "$BIN_DIR/ignite" << 'WRAPPER'
+#!/bin/bash
+# IGNITE launcher - delegates to the main script in DATA_DIR
+DATA_DIR="${IGNITE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/ignite}"
+exec "$DATA_DIR/scripts/ignite" "$@"
+WRAPPER
+        fi
         chmod +x "$BIN_DIR/ignite"
         if [[ "$UPGRADE" == "true" ]]; then
             print_success "ignite を $BIN_DIR にアップグレードしました"

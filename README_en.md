@@ -35,7 +35,7 @@ IGNITE may not be able to sing, dance, or go live streaming just yet, but theyâ€
 - **Architecture**: x86_64 / ARM64
 - **Network**: Always-on internet connection (Claude API communication)
 
-> **Note**: Each Claude Code process consumes approximately 300-500MB of memory. Low-resource devices such as Raspberry Pi Zero 2 W (512MB RAM) are not supported.
+> **Note**: Each Claude Code process consumes approximately 300-500MB of memory.
 
 ### Required Software
 

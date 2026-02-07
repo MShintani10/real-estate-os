@@ -341,7 +341,8 @@ _generate_repo_report() {
     if command -v sqlite3 &>/dev/null && [[ -f "$db" ]]; then
         local raw
         raw=$(sqlite3 "$db" \
-            "PRAGMA busy_timeout=5000; SELECT task_id, title, status FROM tasks WHERE repository='${repo}' AND status != 'completed' ORDER BY task_id;" 2>/dev/null) || raw=""
+            "PRAGMA busy_timeout=5000; SELECT task_id, title, status FROM tasks WHERE repository='${repo}' AND status != 'completed' ORDER BY task_id;" 2>/dev/null \
+            | grep '|') || raw=""
         if [[ -n "$raw" ]]; then
             task_lines="| Task ID | Title | Status |"$'\n'
             task_lines+="|---------|-------|--------|"$'\n'

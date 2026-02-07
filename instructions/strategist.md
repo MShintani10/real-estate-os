@@ -290,6 +290,80 @@ payload:
 - **Grep**: 関連情報の検索
 - **Bash**: プロジェクト情報の取得（git log, ls, etc.）
 
+## メモリ操作（SQLite）
+
+メモリデータベース `workspace/state/memory.db` を使って記録と復元を行います。
+
+> **MEMORY.md との責務分離**:
+> - `MEMORY.md` = エージェント個人のノウハウ・学習メモ（テキストベース）
+> - `SQLite` = システム横断の構造化データ（クエリ可能）
+
+> **sqlite3 不在時**: メモリ操作はスキップし、コア機能に影響なし（ログに警告を出力して続行）
+
+> **SQL injection 対策**: ユーザー入力をSQLに含める場合、シングルクォートは二重化する（例: `'` → `''`）
+
+### セッション開始時（必須）
+通知を受け取ったら、まず以下を実行して前回の状態を復元してください:
+
+```bash
+sqlite3 workspace/state/memory.db "PRAGMA busy_timeout=5000; SELECT summary FROM agent_states WHERE agent='strategist';"
+sqlite3 workspace/state/memory.db "PRAGMA busy_timeout=5000; SELECT task_id, assigned_to, status, title FROM tasks WHERE status IN ('queued','in_progress') ORDER BY started_at DESC LIMIT 20;"
+sqlite3 workspace/state/memory.db "PRAGMA busy_timeout=5000; SELECT type, content, timestamp FROM memories WHERE agent='strategist' ORDER BY timestamp DESC LIMIT 10;"
+```
+
+### 記録タイミング
+以下のタイミングで必ず記録してください:
+
+- **メッセージ送信時**: type='message_sent'
+- **メッセージ受信時**: type='message_received'
+- **判断・意思決定時**: type='decision'
+- **新しい知見を得た時**: type='learning'
+- **エラー発生時**: type='error'
+- **タスク状態変更時**: tasks テーブルを UPDATE
+
+```bash
+sqlite3 workspace/state/memory.db "PRAGMA busy_timeout=5000; INSERT INTO memories (agent, type, content, context, task_id) VALUES ('strategist', '{type}', '{content}', '{context}', '{task_id}');"
+```
+
+### 状態保存（アイドル時）
+タスク処理が一段落したら、現在の状況を要約して保存してください:
+
+```bash
+sqlite3 workspace/state/memory.db "PRAGMA busy_timeout=5000; INSERT OR REPLACE INTO agent_states (agent, status, current_task_id, last_active, summary) VALUES ('strategist', 'idle', NULL, datetime('now','+9 hours'), '{現在の状況要約}');"
+```
+
+### strategist_state テーブル操作
+
+戦略の状態管理には `strategist_state` テーブルを使用します:
+
+```bash
+# 未完了の戦略があるか確認
+sqlite3 workspace/state/memory.db "PRAGMA busy_timeout=5000; SELECT COUNT(*) FROM strategist_state WHERE status='pending_reviews';"
+
+# 新しい戦略ドラフトを保存
+sqlite3 workspace/state/memory.db "PRAGMA busy_timeout=5000; INSERT INTO strategist_state (request_id, goal, status, created_at, draft_strategy, reviews) VALUES ('{request_id}', '{goal}', 'pending_reviews', datetime('now','+9 hours'), '{draft_strategy_json}', '{reviews_json}');"
+
+# レビュー回答を更新
+sqlite3 workspace/state/memory.db "PRAGMA busy_timeout=5000; UPDATE strategist_state SET reviews=json_set(reviews, '$.{reviewer}.status', 'received', '$.{reviewer}.response', '{response_json}') WHERE request_id='{request_id}';"
+
+# 全レビュー完了 → ステータス更新
+sqlite3 workspace/state/memory.db "PRAGMA busy_timeout=5000; UPDATE strategist_state SET status='completed' WHERE request_id='{request_id}';"
+```
+
+### 後方互換性: 既存 YAML からの移行
+
+起動時に `workspace/state/` ディレクトリに旧形式の戦略状態 YAML ファイルが存在する場合、内容を `strategist_state` テーブルに移行してください:
+
+```bash
+# 旧形式の戦略状態YAMLが存在する場合の移行手順
+OLD_YAML="workspace/state/strategist""_pending.yaml"
+if [[ -f "$OLD_YAML" ]]; then
+    # YAMLの内容を読み取り、strategist_state に INSERT
+    # 移行完了後、YAMLファイルを削除
+    rm "$OLD_YAML"
+fi
+```
+
 ## タスク処理手順
 
 **重要**: 以下は通知を受け取った時の処理手順です。**自発的にキューをポーリングしないでください。**
@@ -301,10 +375,13 @@ queue_monitorから通知が来たら、以下を実行してください:
    - 目標と要件を理解
    - 読み込んだメッセージファイルを削除（Bashツールで `rm`）
 
-2. **状態ファイルの確認**
-   - `workspace/state/strategist_pending.yaml` が存在するか確認
-   - 存在する場合: **回答チェックフロー**（ステップ7）へ
-   - 存在しない場合: **新規依頼処理**（ステップ3）へ
+2. **保留中の戦略の確認**
+   - `strategist_state` テーブルで未完了の戦略があるか確認:
+     ```bash
+     sqlite3 workspace/state/memory.db "PRAGMA busy_timeout=5000; SELECT request_id, goal, status FROM strategist_state WHERE status='pending_reviews';"
+     ```
+   - 結果がある場合: **回答チェックフロー**（ステップ7）へ
+   - 結果がない場合: **新規依頼処理**（ステップ3）へ
 
 3. **プロジェクトコンテキストの確認**
    - 必要に応じて既存ファイルを確認
@@ -322,24 +399,33 @@ queue_monitorから通知が来たら、以下を実行してください:
    - 優先度を付与
 
 6. **Sub-Leadersへのレビュー依頼（必須）**
-   - 状態ファイル `workspace/state/strategist_pending.yaml` を作成
+   - `strategist_state` テーブルに戦略ドラフトを保存:
+     ```bash
+     sqlite3 workspace/state/memory.db "PRAGMA busy_timeout=5000; INSERT INTO strategist_state (request_id, goal, status, created_at, draft_strategy, reviews) VALUES ('{request_id}', '{goal}', 'pending_reviews', datetime('now','+9 hours'), '{draft_json}', '{\"architect\":{\"status\":\"pending\"},\"evaluator\":{\"status\":\"pending\"},\"innovator\":{\"status\":\"pending\"}}');"
+     ```
    - **Architect（祢音ナナ）**に設計レビュー依頼を送信
    - **Evaluator（衣結ノア）**に品質プラン依頼を送信
    - **Innovator（恵那ツムギ）**にインサイト依頼を送信
    - **※3人全員からの回答を待つ**（次の通知で回答をチェック）
 
-7. **回答チェックフロー**（状態ファイルが存在する場合）
+7. **回答チェックフロー**（保留中の戦略がある場合）
    a. `workspace/queue/strategist/` で回答をチェック:
       - `design_review_response` (from: architect)
       - `quality_plan_response` (from: evaluator)
       - `insight_response` (from: innovator)
-   b. 回答があれば状態ファイルを更新
+   b. 回答があれば `strategist_state` テーブルを更新:
+      ```bash
+      sqlite3 workspace/state/memory.db "PRAGMA busy_timeout=5000; UPDATE strategist_state SET reviews=json_set(reviews, '$.architect.status', 'received', '$.architect.response', '{response}') WHERE request_id='{request_id}';"
+      ```
    c. 3人全員から回答が揃ったら:
       - フィードバックを統合
       - 必要に応じて戦略を修正
       - **最終戦略をLeaderに送信**
       - **タスクリストをCoordinatorに送信**（品質基準付き）
-      - 状態ファイルを削除
+      - ステータスを完了に更新:
+        ```bash
+        sqlite3 workspace/state/memory.db "PRAGMA busy_timeout=5000; UPDATE strategist_state SET status='completed' WHERE request_id='{request_id}';"
+        ```
       - キュー内の回答ファイルも全て削除（Bashツールで `rm workspace/queue/strategist/*_response_*.yaml`）
    d. まだ揃っていなければ処理を終了し待機
 
@@ -413,41 +499,36 @@ pattern: "*"
 [義賀リオ] 3人からの回答を待機します
 ```
 
-状態ファイルの作成:
-```yaml
-# workspace/state/strategist_pending.yaml
-request_id: "strategy_20260131170500"
-goal: "READMEファイルを作成する"
-status: "pending_reviews"
-created_at: "2026-01-31T17:05:00+09:00"
-
-draft_strategy:
-  approach: "段階的構築"
-  phases: [...]
-  tasks: [...]
-
-reviews:
-  architect:
-    status: "pending"
-    response: null
-  evaluator:
-    status: "pending"
-    response: null
-  innovator:
-    status: "pending"
-    response: null
+戦略ドラフトを `strategist_state` テーブルに保存:
+```bash
+sqlite3 workspace/state/memory.db "PRAGMA busy_timeout=5000; INSERT INTO strategist_state (request_id, goal, status, created_at, draft_strategy, reviews) VALUES (
+  'strategy_20260131170500',
+  'READMEファイルを作成する',
+  'pending_reviews',
+  datetime('now','+9 hours'),
+  '{\"approach\":\"段階的構築\",\"phases\":[...],\"tasks\":[...]}',
+  '{\"architect\":{\"status\":\"pending\",\"response\":null},\"evaluator\":{\"status\":\"pending\",\"response\":null},\"innovator\":{\"status\":\"pending\",\"response\":null}}'
+);"
 ```
 
-### 回答チェック時（次のループ以降）
+### 回答チェック時（次の通知以降）
 
 **7. 回答の確認**
 ```
-[義賀リオ] 状態ファイルを確認...レビュー待機中です
+[義賀リオ] strategist_state を確認...レビュー待機中です
 [義賀リオ] 回答をチェック中...
 [義賀リオ] ✓ Architect（祢音ナナ）から回答あり
 [義賀リオ] ✓ Evaluator（衣結ノア）から回答あり
 [義賀リオ] ✓ Innovator（恵那ツムギ）から回答あり
 [義賀リオ] 全員から回答が揃いました
+```
+
+回答を `strategist_state` に記録:
+```bash
+# 各レビュアーの回答を更新
+sqlite3 workspace/state/memory.db "PRAGMA busy_timeout=5000; UPDATE strategist_state SET reviews=json_set(reviews, '$.architect.status', 'received', '$.architect.response', '{...}') WHERE request_id='strategy_20260131170500';"
+sqlite3 workspace/state/memory.db "PRAGMA busy_timeout=5000; UPDATE strategist_state SET reviews=json_set(reviews, '$.evaluator.status', 'received', '$.evaluator.response', '{...}') WHERE request_id='strategy_20260131170500';"
+sqlite3 workspace/state/memory.db "PRAGMA busy_timeout=5000; UPDATE strategist_state SET reviews=json_set(reviews, '$.innovator.status', 'received', '$.innovator.response', '{...}') WHERE request_id='strategy_20260131170500';"
 ```
 
 **8. フィードバックの統合**
@@ -463,8 +544,12 @@ reviews:
 ```
 [義賀リオ] 最終戦略をLeaderに送信しました
 [義賀リオ] タスクリスト（品質基準付き）をCoordinatorに送信しました
-[義賀リオ] 状態ファイルを削除しました
 [義賀リオ] 論理的な計画が完成しました
+```
+
+ステータスを完了に更新:
+```bash
+sqlite3 workspace/state/memory.db "PRAGMA busy_timeout=5000; UPDATE strategist_state SET status='completed' WHERE request_id='strategy_20260131170500';"
 ```
 
 ## タスク分解の原則

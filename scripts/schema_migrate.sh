@@ -25,12 +25,13 @@ fi
 
 echo "[schema_migrate] Migrating from version $CURRENT_VERSION to 2..." >&2
 
+# ALTER TABLE は冪等でないため、個別に実行しエラーを許容
+# （部分的マイグレーション後の再実行で "duplicate column name" が発生しうる）
+sqlite3 "$DB_PATH" "PRAGMA busy_timeout=5000; ALTER TABLE tasks ADD COLUMN repository TEXT;" 2>/dev/null || true
+sqlite3 "$DB_PATH" "PRAGMA busy_timeout=5000; ALTER TABLE tasks ADD COLUMN issue_number INTEGER;" 2>/dev/null || true
+
 sqlite3 "$DB_PATH" <<'SQL'
 PRAGMA busy_timeout = 5000;
-
--- 新カラム追加（既に存在する場合はエラーを無視）
-ALTER TABLE tasks ADD COLUMN repository TEXT;
-ALTER TABLE tasks ADD COLUMN issue_number INTEGER;
 
 -- 既存全行にデフォルトのリポジトリを設定
 UPDATE tasks SET repository = 'myfinder/IGNITE' WHERE repository IS NULL;

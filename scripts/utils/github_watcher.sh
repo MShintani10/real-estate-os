@@ -950,7 +950,9 @@ process_issue_comments() {
 
             # トリガータイプを判別
             local trigger_type="implement"
-            if [[ "$body" =~ (レビュー|review) ]]; then
+            if [[ "$body" =~ (インサイト|insights?) ]]; then
+                trigger_type="insights"
+            elif [[ "$body" =~ (レビュー|review) ]]; then
                 trigger_type="review"
             elif [[ "$body" =~ (説明|explain) ]]; then
                 trigger_type="explain"
@@ -1025,7 +1027,9 @@ process_prs() {
 
             # トリガータイプを判別
             local trigger_type="review"
-            if [[ "$body" =~ (実装|implement) ]]; then
+            if [[ "$body" =~ (インサイト|insights?) ]]; then
+                trigger_type="insights"
+            elif [[ "$body" =~ (実装|implement) ]]; then
                 trigger_type="implement"
             elif [[ "$body" =~ (説明|explain) ]]; then
                 trigger_type="explain"
@@ -1100,7 +1104,9 @@ process_pr_comments() {
 
             # トリガータイプを判別
             local trigger_type="review"
-            if [[ "$body" =~ (実装|implement) ]]; then
+            if [[ "$body" =~ (インサイト|insights?) ]]; then
+                trigger_type="insights"
+            elif [[ "$body" =~ (実装|implement) ]]; then
                 trigger_type="implement"
             elif [[ "$body" =~ (説明|explain) ]]; then
                 trigger_type="explain"
@@ -1185,7 +1191,9 @@ process_pr_reviews() {
 
             # トリガータイプを判別（本体 + コード行コメントから）
             local trigger_type="review"
-            if [[ "$all_text" =~ (実装|implement) ]]; then
+            if [[ "$all_text" =~ (インサイト|insights?) ]]; then
+                trigger_type="insights"
+            elif [[ "$all_text" =~ (実装|implement) ]]; then
                 trigger_type="implement"
             elif [[ "$all_text" =~ (説明|explain) ]]; then
                 trigger_type="explain"

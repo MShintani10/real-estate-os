@@ -43,8 +43,20 @@ CREATE TABLE IF NOT EXISTS strategist_state (
     reviews TEXT                -- JSON: 各Sub-Leaderのレビュー状態
 );
 
+-- Insight ログテーブル（Memory Insights → Issue 起票の処理履歴）
+CREATE TABLE IF NOT EXISTS insight_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    memory_ids TEXT NOT NULL,        -- JSON配列: 処理対象のmemory IDリスト [1, 5, 12]
+    repository TEXT NOT NULL,        -- 起票先リポジトリ (owner/repo)
+    issue_number INTEGER,            -- 起票したIssue番号 (NULLならcomment追加)
+    action TEXT NOT NULL,            -- 'created' or 'commented'
+    title TEXT,                      -- Issueタイトル
+    timestamp DATETIME DEFAULT (datetime('now', '+9 hours'))
+);
+
 -- インデックス
 CREATE INDEX IF NOT EXISTS idx_memories_agent_type ON memories(agent, type, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_memories_task ON memories(task_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status, assigned_to);
 CREATE INDEX IF NOT EXISTS idx_strategist_status ON strategist_state(status);
+CREATE INDEX IF NOT EXISTS idx_insight_log_repo ON insight_log(repository);

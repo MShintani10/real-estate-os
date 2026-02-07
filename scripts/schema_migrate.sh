@@ -57,10 +57,22 @@ echo "[schema_migrate] Migrating from version $CURRENT_VERSION to 2..." >&2
 
 REPO_NAME=$(get_repository_name)
 
-# ALTER TABLE は冪等でないため、個別に実行しエラーを許容
-# （部分的マイグレーション後の再実行で "duplicate column name" が発生しうる）
-sqlite3 "$DB_PATH" "PRAGMA busy_timeout=5000; ALTER TABLE tasks ADD COLUMN repository TEXT;" 2>/dev/null || true
-sqlite3 "$DB_PATH" "PRAGMA busy_timeout=5000; ALTER TABLE tasks ADD COLUMN issue_number INTEGER;" 2>/dev/null || true
+# カラム存在チェック（pragma_table_info）で冪等なALTER TABLE
+HAS_REPO=$(sqlite3 "$DB_PATH" \
+  "SELECT COUNT(*) FROM pragma_table_info('tasks') WHERE name='repository';")
+HAS_ISSUE=$(sqlite3 "$DB_PATH" \
+  "SELECT COUNT(*) FROM pragma_table_info('tasks') WHERE name='issue_number';")
+
+if [[ "$HAS_REPO" -eq 0 ]]; then
+    sqlite3 "$DB_PATH" "PRAGMA busy_timeout=5000; \
+      ALTER TABLE tasks ADD COLUMN repository TEXT;"
+    echo "[schema_migrate] Added column: repository" >&2
+fi
+if [[ "$HAS_ISSUE" -eq 0 ]]; then
+    sqlite3 "$DB_PATH" "PRAGMA busy_timeout=5000; \
+      ALTER TABLE tasks ADD COLUMN issue_number INTEGER;"
+    echo "[schema_migrate] Added column: issue_number" >&2
+fi
 
 sqlite3 "$DB_PATH" <<SQL
 PRAGMA busy_timeout = 5000;

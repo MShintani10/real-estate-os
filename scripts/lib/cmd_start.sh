@@ -130,6 +130,15 @@ cmd_start() {
     mkdir -p "$WORKSPACE_DIR/state"  # Watcher用ステートファイル保存先
     mkdir -p "$WORKSPACE_DIR/repos"  # 外部リポジトリのclone先
 
+    # SQLite メモリデータベースの初期化
+    if command -v sqlite3 &>/dev/null; then
+        print_info "メモリデータベースを初期化中..."
+        sqlite3 "$WORKSPACE_DIR/state/memory.db" < "$IGNITE_SCRIPTS_DIR/schema.sql"
+        sqlite3 "$WORKSPACE_DIR/state/memory.db" "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;"
+    else
+        print_warning "sqlite3 が見つかりません。メモリ機能は無効です。"
+    fi
+
     # 初期ダッシュボードの作成
     print_info "初期ダッシュボードを作成中..."
     cat > "$WORKSPACE_DIR/dashboard.md" <<EOF

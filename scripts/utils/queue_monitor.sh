@@ -111,6 +111,47 @@ send_to_agent() {
 }
 
 # =============================================================================
+# 日次レポート連携
+# =============================================================================
+
+_trigger_daily_report() {
+    local repo="$1"
+    local issue_num="${2:-}"
+    local trigger="${3:-}"
+
+    local daily_report_script="${SCRIPT_DIR}/daily_report.sh"
+    if [[ ! -x "$daily_report_script" ]]; then
+        return 0
+    fi
+
+    # Issue を確保（なければ作成）
+    local report_issue
+    report_issue=$(WORKSPACE_DIR="$WORKSPACE_DIR" "$daily_report_script" ensure --repo "$repo" 2>/dev/null) || {
+        log_warn "日次レポート Issue の確保に失敗しました ($repo)"
+        return 0
+    }
+
+    if [[ -z "$report_issue" ]]; then
+        return 0
+    fi
+
+    # 作業開始コメントを追加
+    local comment_body
+    comment_body="### Task Started
+
+- **Issue/PR:** #${issue_num}
+- **Trigger:** ${trigger}
+- **Time:** $(date '+%Y-%m-%d %H:%M:%S %Z')"
+
+    WORKSPACE_DIR="$WORKSPACE_DIR" "$daily_report_script" comment \
+        --repo "$repo" \
+        --issue "$report_issue" \
+        --body "$comment_body" 2>/dev/null || {
+        log_warn "日次レポートへのコメント追加に失敗しました ($repo)"
+    }
+}
+
+# =============================================================================
 # メッセージ処理
 # =============================================================================
 
@@ -139,6 +180,10 @@ process_message() {
             local issue_num
             issue_num=$(grep -E '^\s*issue_number:' "$file" | head -1 | awk '{print $2}' | tr -d '"')
             instruction="新しいGitHubタスクが来ました。$file を読んで処理してください。リポジトリ: $repo, Issue/PR: #$issue_num, トリガー: $trigger"
+            # 日次レポートに作業開始を記録（バックグラウンド）
+            if [[ -n "$repo" ]]; then
+                _trigger_daily_report "$repo" "$issue_num" "$trigger" &
+            fi
             ;;
         github_event)
             local event_type

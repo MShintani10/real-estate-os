@@ -6,6 +6,31 @@ set -u
 
 DB_PATH="${1:-${WORKSPACE_DIR:-workspace}/state/memory.db}"
 
+# リポジトリ名の動的取得（3段階フォールバック）
+get_repository_name() {
+    # 1. 環境変数 IGNITE_REPOSITORY（最優先、CI環境対応）
+    if [[ -n "${IGNITE_REPOSITORY:-}" ]]; then
+        echo "[schema_migrate] Using IGNITE_REPOSITORY env: $IGNITE_REPOSITORY" >&2
+        echo "$IGNITE_REPOSITORY"
+        return 0
+    fi
+
+    # 2. git remote get-url origin（HTTPS/SSH両対応）
+    local url
+    if url=$(git remote get-url origin 2>/dev/null); then
+        url="${url%.git}"
+        if [[ "$url" =~ github\.com[/:]([A-Za-z0-9._-]+/[A-Za-z0-9._-]+)$ ]]; then
+            echo "[schema_migrate] Detected repository from git remote: ${BASH_REMATCH[1]}" >&2
+            echo "${BASH_REMATCH[1]}"
+            return 0
+        fi
+    fi
+
+    # 3. 最終フォールバック
+    echo "[schema_migrate] WARNING: Could not detect repository name, using fallback 'myfinder/IGNITE'" >&2
+    echo "myfinder/IGNITE"
+}
+
 if [[ ! -f "$DB_PATH" ]]; then
     echo "[schema_migrate] DB not found: $DB_PATH (skip)" >&2
     exit 0
@@ -25,16 +50,18 @@ fi
 
 echo "[schema_migrate] Migrating from version $CURRENT_VERSION to 2..." >&2
 
+REPO_NAME=$(get_repository_name)
+
 # ALTER TABLE は冪等でないため、個別に実行しエラーを許容
 # （部分的マイグレーション後の再実行で "duplicate column name" が発生しうる）
 sqlite3 "$DB_PATH" "PRAGMA busy_timeout=5000; ALTER TABLE tasks ADD COLUMN repository TEXT;" 2>/dev/null || true
 sqlite3 "$DB_PATH" "PRAGMA busy_timeout=5000; ALTER TABLE tasks ADD COLUMN issue_number INTEGER;" 2>/dev/null || true
 
-sqlite3 "$DB_PATH" <<'SQL'
+sqlite3 "$DB_PATH" <<SQL
 PRAGMA busy_timeout = 5000;
 
 -- 既存全行にデフォルトのリポジトリを設定
-UPDATE tasks SET repository = 'myfinder/IGNITE' WHERE repository IS NULL;
+UPDATE tasks SET repository = '${REPO_NAME}' WHERE repository IS NULL;
 
 -- パターン1,2: issue{N}_task_{M}, issue{N}_task{M}
 -- パターン含む issue{N}p{P}_task_* (CASTが非数字で停止するため自動対応)

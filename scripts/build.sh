@@ -129,6 +129,13 @@ copy_main_script() {
         cp "$SCRIPT_DIR/schema.sql" "$BUILD_DIR/share/scripts/schema.sql"
         print_success "schema.sql をコピーしました"
     fi
+
+    # scripts/schema_migrate.sh（メモリDB マイグレーション）
+    if [[ -f "$SCRIPT_DIR/schema_migrate.sh" ]]; then
+        cp "$SCRIPT_DIR/schema_migrate.sh" "$BUILD_DIR/share/scripts/schema_migrate.sh"
+        chmod +x "$BUILD_DIR/share/scripts/schema_migrate.sh"
+        print_success "schema_migrate.sh をコピーしました"
+    fi
 }
 
 copy_installers() {

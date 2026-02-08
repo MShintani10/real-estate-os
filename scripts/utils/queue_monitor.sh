@@ -372,9 +372,11 @@ _generate_repo_report() {
     fi
 
     local task_lines=""
+    local sqlite_available=false
 
     # メインパス: SQLite tasksテーブルから直接取得
     if command -v sqlite3 &>/dev/null && [[ -f "$db" ]]; then
+        sqlite_available=true
         # Layer 2: SQLエスケープ（シングルクォート二重化）
         local safe_repo="${repo//\'/\'\'}"
         local raw
@@ -395,11 +397,10 @@ _generate_repo_report() {
         fi
     fi
 
-    # フォールバック: SQLite不在またはクエリ結果が空の場合、dashboard.mdからawk抽出
-    # NOTE: フォールバック（awk）パスではリポジトリ別フィルタリングは不可
-    # （dashboard.md テーブルに repository 列がないため）。
-    # SQLiteパスが主、フォールバックは全タスクを表示。
-    if [[ -z "$task_lines" ]] && [[ -f "$dashboard" ]]; then
+    # フォールバック: SQLite利用不可の場合のみ、dashboard.mdから全タスクを抽出
+    # NOTE: SQLite利用可能時はタスク0件でもfallbackしない（他リポのタスク混入防止）
+    # NOTE: awkパスではリポジトリフィルタリング不可（名前形式の不一致: 短縮名 vs 完全名）
+    if [[ -z "$task_lines" ]] && [[ "$sqlite_available" != true ]] && [[ -f "$dashboard" ]]; then
         task_lines=$(awk '
             /^## 現在のタスク/ { in_section=1; next }
             /^## /             { in_section=0 }

@@ -364,6 +364,20 @@ sequenceDiagram
 - queue_monitor detects and notifies recipient via tmux
 - Recipient deletes file after handling
 
+### Data Storage Architecture
+
+IGNITE manages data across two complementary layers: **YAML file queues** and a **SQLite database**.
+
+| Layer | Technology | Role | Lifetime |
+|-------|-----------|------|----------|
+| **Messaging Layer** | YAML file queue | Real-time inter-agent communication (delivering instructions & responses) | Ephemeral (disposed after delivery) |
+| **Storage Layer** | SQLite (`memory.db`) | Memory persistence, task state tracking, dashboard generation | Persistent (retained across sessions) |
+
+- **YAML Queue**: `queue_monitor.sh` polls every 10 seconds, providing at-least-once delivery guarantee, Exponential Backoff retry, and DLQ escalation
+- **SQLite**: Uses WAL mode for concurrent access. All agents record learnings, decisions, and task states across sessions, enabling state restoration on restart and Memory Insights analysis
+
+See the "Data Storage Architecture" section in [docs/architecture.md](docs/architecture.md) for details.
+
 ## 👥 Team Members
 
 ### 🔥 Leader - Yui Iha (伊羽ユイ)

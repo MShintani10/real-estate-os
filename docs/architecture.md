@@ -200,25 +200,23 @@ ignite/
 
 ### tmuxセッション構成
 
-```
-Session: ignite-session
-Window: ignite
+Session `ignite-session` の単一ウィンドウ内に、全ペインが `tiled` レイアウト（均等タイル配置）で並びます。
 
-┌─────────────────────────────────────────┐
-│ Pane 0: Leader (伊羽ユイ)               │
-└─────────────────────────────────────────┘
-┌─────────┬─────────┬─────────┬───────────┐
-│ Pane 1  │ Pane 2  │ Pane 3  │ Pane 4    │
-│Strategy │Architect│Evaluator│Coordinator│
-└─────────┴─────────┴─────────┴───────────┘
-┌─────────────────────────────────────────┐
-│ Pane 5: Innovator (恵那ツムギ)          │
-└─────────────────────────────────────────┘
-┌────┬────┬────┬────┬────┬────┬────┬─────┐
-│ P6 │ P7 │ P8 │ P9 │P10 │P11 │P12 │P13..│
-│IG1 │IG2 │IG3 │IG4 │IG5 │IG6 │IG7 │IG8..│
-└────┴────┴────┴────┴────┴────┴────┴─────┘
-```
+**ペイン番号の割り当て:**
+
+| ペイン | エージェント | 備考 |
+|--------|-------------|------|
+| 0 | Leader (伊羽ユイ) | 最初のペイン |
+| 1 | Strategist (義賀リオ) | Sub-Leaders |
+| 2 | Architect (祢音ナナ) | Sub-Leaders |
+| 3 | Evaluator (衣結ノア) | Sub-Leaders |
+| 4 | Coordinator (通瀬アイナ) | Sub-Leaders |
+| 5 | Innovator (恵那ツムギ) | Sub-Leaders |
+| 6 | IGNITIAN-1 | `5 + N` で算出 |
+| 7 | IGNITIAN-2 | |
+| ... | IGNITIAN-N | 最大32並列 |
+
+各ペインは `tmux split-window -h` で追加後 `select-layout tiled` で均等配置されます。
 
 ### エージェント起動
 

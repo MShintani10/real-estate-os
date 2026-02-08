@@ -307,27 +307,133 @@ Coordinatorが以下を考慮してタスク配分:
 2. 送信元エージェントの実装
 3. 受信先エージェントの処理実装
 
-## エージェントメモリ永続化
+## データストレージアーキテクチャ
 
-各エージェントはSQLiteデータベース（`workspace/memory.db`）を使用して、セッションをまたいだ学習内容・決定記録を永続化します。
+IGNITEは **YAMLファイルキュー** と **SQLiteデータベース** の2層で情報を管理します。それぞれ役割が明確に分かれており、相互に補完する設計です。
 
-### スキーマ
+```mermaid
+graph LR
+    subgraph YAML["YAMLファイルキュー"]
+        direction TB
+        Y1["リアルタイム通信"]
+        Y2["エージェント間メッセージング"]
+    end
+    subgraph SQLite["SQLite memory.db"]
+        direction TB
+        S1["永続データ・状態管理"]
+        S2["セッション横断メモリ・分析"]
+    end
 
-テーブル定義は `scripts/schema.sql` に定義されています。主なテーブル:
+    Agent((エージェント)) --> YAML
+    Agent --> SQLite
+    YAML -. "タスク状態の同期" .-> SQLite
 
-- **decisions** — 設計判断・技術選定などの決定事項とその理由
-- **learnings** — 作業中に得た知見・教訓
-- **task_history** — タスク実行履歴と結果
+    style YAML fill:#4ecdc4,color:#fff
+    style SQLite fill:#45b7d1,color:#fff
+```
 
-### 利用フロー
+### 使い分けの原則
 
-1. システム起動時に `schema.sql` を使用してDBを初期化（テーブルが存在しない場合のみ作成）
-2. 各エージェントが作業中に得た知見・決定をDBに記録
-3. 次回セッションで過去の記録を参照し、一貫性のある判断を実現
+| 観点 | YAMLファイルキュー | SQLite |
+|------|-------------------|--------|
+| **役割** | リアルタイム通信（「今何をすべきか」） | 永続記録（「何が起きたか・今どうか」） |
+| **寿命** | 短命（配信完了で役目終了） | 永続（セッション横断で保持） |
+| **データ型** | メッセージ（命令・応答） | 構造化レコード（履歴・状態） |
+| **アクセス** | ファイル mv/read/write | SQL CRUD |
+| **並行制御** | ファイルシステムの原子性 | WALモード + busy_timeout |
+| **障害対応** | リトライ + DLQ | 冪等スキーマ + マイグレーション |
+| **主な使用者** | `queue_monitor.sh` | 各エージェント（instructions内で直接実行） |
 
-### 対応エージェント
+### YAMLファイルキュー — メッセージング層
 
-全エージェント（Leader、Sub-Leaders、IGNITIANS）がメモリ永続化に対応しています。各エージェントのシステムプロンプト（`instructions/*.md`）にSQLiteメモリ操作の手順が記載されています。
+エージェント間のリアルタイム通信を担います。`queue_monitor.sh` が10秒ポーリングでキューを監視し、tmux経由でエージェントに配信します。
+
+**キューディレクトリ:**
+```
+workspace/queue/
+├── leader/              # Leaderエージェント用
+│   ├── *.yaml           # 未処理メッセージ
+│   └── processed/       # 処理中・完了メッセージ
+├── strategist/          # Strategist用
+├── architect/           # Architect用
+├── evaluator/           # Evaluator用
+├── coordinator/         # Coordinator用
+├── innovator/           # Innovator用
+├── ignitian_1/          # IGNITIAN-1用（個別ディレクトリ）
+├── ignitian_2/          # IGNITIAN-2用
+├── ignitian_{n}/        # IGNITIAN-N用（動的）
+└── dead_letter/         # リトライ失敗後のメッセージ
+```
+
+**メッセージライフサイクル:**
+
+```mermaid
+stateDiagram-v2
+    [*] --> 未処理: queue/*.yaml 作成
+    未処理 --> processing: mv to processed/
+    processing --> delivered: 配信成功
+    processing --> retrying: タイムアウト検知
+    retrying --> processing: 再配信試行
+    retrying --> DLQ: リトライ上限超過
+    DLQ --> escalation: Leaderへ通知
+    delivered --> [*]
+
+    note right of processing: at-least-once 配信保証
+    note right of retrying: Exponential Backoff with Full Jitter
+```
+
+**関連スクリプト:**
+- `scripts/utils/queue_monitor.sh` — キュー監視デーモン
+- `scripts/lib/retry_handler.sh` — Exponential Backoff with Full Jitterリトライ
+- `scripts/lib/dlq_handler.sh` — Dead Letter Queue処理・エスカレーション
+
+### SQLite (memory.db) — 永続ストレージ層
+
+セッション横断のメモリ永続化・タスク状態追跡・ダッシュボード生成を担います。
+
+**テーブル構成（v2スキーマ）:**
+
+| テーブル | 用途 |
+|---------|------|
+| `memories` | 全エージェントの学習・決定・観察・エラーログ |
+| `tasks` | タスク進行状態の追跡（repository, issue_number含む） |
+| `agent_states` | エージェント再起動時の状態復元 |
+| `strategist_state` | 戦略立案の状態管理（JSONフィールド使用） |
+| `insight_log` | Memory Insights処理履歴 |
+
+**初期化シーケンス（`cmd_start.sh`）:**
+1. `schema.sql` でテーブル・インデックス作成（`IF NOT EXISTS`で冪等）
+2. `PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;` で並行アクセス対応
+3. `schema_migrate.sh` でスキーマバージョンアップ（`PRAGMA user_version`管理）
+
+**関連スクリプト:**
+- `scripts/schema.sql` — スキーマ定義
+- `scripts/schema_migrate.sh` — マイグレーション（v1→v2）
+- `scripts/lib/cmd_start.sh` — DB初期化
+
+### タスクデータの二重管理
+
+`tasks`は唯一、YAMLとSQLiteの両方で管理されるデータです。ただし用途は明確に異なります。
+
+```mermaid
+sequenceDiagram
+    participant C as Coordinator
+    participant YQ as YAML Queue
+    participant DB as SQLite tasks
+    participant IG as IGNITIAN
+
+    C->>YQ: task_assignment_*.yaml 作成（指示の配信）
+    C->>DB: INSERT INTO tasks status='in_progress'（状態の記録）
+    YQ->>IG: queue_monitor経由で配信
+    IG->>YQ: progress_update_*.yaml 作成（完了の通知）
+    IG->>DB: UPDATE tasks SET status='completed'（履歴の永続化）
+
+    Note over YQ: 一時的：配信完了で役目終了
+    Note over DB: 永続的：ダッシュボード・分析に使用
+```
+
+- **YAML**: 「このタスクをやれ」という**指示の配信手段**（一時的）
+- **SQLite**: 「このタスクは今どうなっている」という**状態の記録**（永続的、ダッシュボード・分析に使用）
 
 ## 日次レポート管理
 

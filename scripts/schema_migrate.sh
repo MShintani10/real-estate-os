@@ -136,11 +136,15 @@ if [[ "$CURRENT_VERSION" -lt 3 ]]; then
         echo "[schema_migrate] Added column: memories.issue_number" >&2
     fi
 
+    # Determine the time column name (schema.sql uses 'timestamp', legacy DBs use 'created_at')
+    time_col=$(sqlite3 "$DB_PATH" "PRAGMA table_info(memories);" | grep -E '\|timestamp\||\|created_at\|' | head -1 | cut -d'|' -f2)
+    time_col="${time_col:-created_at}"
+
     sqlite3 "$DB_PATH" <<SQL
 PRAGMA busy_timeout = 5000;
 
 -- 複合インデックス: リポジトリ+Issue番号でのメモリ検索を高速化
-CREATE INDEX IF NOT EXISTS idx_memories_repo_issue ON memories(repository, issue_number, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_memories_repo_issue ON memories(repository, issue_number, ${time_col} DESC);
 
 -- バージョン更新
 PRAGMA user_version = 3;

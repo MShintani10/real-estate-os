@@ -35,6 +35,14 @@ DEFAULT_INTERVAL=60
 DEFAULT_STATE_FILE="workspace/state/github_watcher_state.json"
 DEFAULT_CONFIG_FILE="github-watcher.yaml"
 
+# SIGHUP設定リロード用フラグ（trap内では直接load_config()を呼ばない）
+_RELOAD_REQUESTED=false
+
+# グレースフル停止用フラグ（trap内ではフラグを立てるだけ、exit()を呼ばない）
+_SHUTDOWN_REQUESTED=false
+_SHUTDOWN_SIGNAL=""
+_EXIT_CODE=0
+
 # カラー定義
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -1304,7 +1312,7 @@ run_daemon() {
 
     local refresh_counter=0
 
-    while true; do
+    while [[ "$_SHUTDOWN_REQUESTED" != true ]]; do
         # tmuxセッション生存チェック（環境変数が設定されている場合のみ）
         if [[ -n "${IGNITE_TMUX_SESSION:-}" ]]; then
             if ! tmux has-session -t "$IGNITE_TMUX_SESSION" 2>/dev/null; then
@@ -1319,18 +1327,35 @@ run_daemon() {
             if [[ $refresh_counter -ge $PATTERN_REFRESH_INTERVAL ]]; then
                 refresh_counter=0
                 log_info "パターンリフレッシュ実行中..."
-                expand_patterns "${REPO_PATTERNS[@]}"
+                expand_patterns "${REPO_PATTERNS[@]}" || log_warn "パターンリフレッシュ失敗、前回のリストを維持"
                 log_info "現在の監視対象: ${REPOSITORIES[*]}"
             fi
         fi
 
-        process_events
+        process_events || log_warn "process_events failed, continuing..."
 
         # 定期的に古いイベントをクリーンアップ
-        cleanup_old_events
+        cleanup_old_events || log_warn "cleanup_old_events failed, continuing..."
 
-        sleep "$POLL_INTERVAL"
+        # SIGHUP による設定リロード（フラグベース遅延実行）
+        if [[ "$_RELOAD_REQUESTED" == true ]]; then
+            _RELOAD_REQUESTED=false
+            load_config || log_warn "設定リロード失敗"
+            if [[ ${#REPO_PATTERNS[@]} -gt 0 ]]; then
+                expand_patterns "${REPO_PATTERNS[@]}" || log_warn "パターン展開失敗"
+            fi
+            log_info "設定リロード完了: 監視対象=${REPOSITORIES[*]}"
+        fi
+
+        # sleep分割: SIGTERM応答性改善（最大1秒以内に停止可能）
+        local i=0
+        while [[ $i -lt $POLL_INTERVAL ]] && [[ "$_SHUTDOWN_REQUESTED" != true ]]; do
+            sleep 1
+            i=$((i + 1))
+        done
     done
+
+    exit "${_EXIT_CODE:-0}"
 }
 
 run_once() {
@@ -1422,9 +1447,43 @@ main() {
     # ステート初期化
     init_state
 
-    # グレースフル停止用の trap
-    trap 'log_info "シグナル受信: 停止します"; exit 0' SIGTERM SIGINT
-    trap 'log_info "GitHub Watcher を終了しました"' EXIT
+    # SIGHUP ハンドラ（フラグベース遅延リロード）
+    # trap内で直接load_config()を呼ぶと、process_events()実行中に
+    # REPOSITORIES[]変更やSTATE_FILE競合が発生するリスクがあるため、
+    # フラグを立てるだけにしてメインループ内で安全にリロードする
+    _handle_sighup() {
+        log_info "SIGHUP受信: リロード予約"
+        _RELOAD_REQUESTED=true
+    }
+
+    # グレースフル停止: フラグベース（trap内でexit()を呼ばない）
+    # process_events()完了を待ってから安全に停止する
+    graceful_shutdown() {
+        _SHUTDOWN_SIGNAL="$1"
+        _SHUTDOWN_REQUESTED=true
+        _EXIT_CODE=$((128 + $1))
+        log_info "シグナル受信 (${1}): 安全に停止します"
+    }
+    trap 'graceful_shutdown 15' SIGTERM
+    trap 'graceful_shutdown 2' SIGINT
+    trap '_handle_sighup' SIGHUP
+
+    # EXIT trap: 終了理由をログに記録
+    cleanup_and_log() {
+        local exit_code=$?
+        [[ $exit_code -eq 0 ]] && exit_code=${_EXIT_CODE:-0}
+        if [[ -n "$_SHUTDOWN_SIGNAL" ]]; then
+            log_info "GitHub Watcher 終了: シグナル${_SHUTDOWN_SIGNAL}による停止"
+        elif [[ $exit_code -eq 0 ]]; then
+            log_info "GitHub Watcher 終了: 正常終了"
+        elif [[ $exit_code -gt 128 ]]; then
+            local sig=$((exit_code - 128))
+            log_warn "GitHub Watcher 終了: 未捕捉シグナル$(kill -l $sig 2>/dev/null || echo UNKNOWN)"
+        else
+            log_error "GitHub Watcher 終了: 異常終了 (exit_code=$exit_code)"
+        fi
+    }
+    trap cleanup_and_log EXIT
 
     # 実行モード
     case "$mode" in

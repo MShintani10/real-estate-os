@@ -25,6 +25,14 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# グレースフル停止用フラグ（trap内ではフラグを立てるだけ、exit()を呼ばない）
+_SHUTDOWN_REQUESTED=false
+_SHUTDOWN_SIGNAL=""
+_EXIT_CODE=0
+
+# SIGHUP設定リロード用フラグ（trap内では直接設定変更を行わない）
+_RELOAD_REQUESTED=false
+
 # カラー定義
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -530,7 +538,13 @@ process_message() {
             ;;
     esac
 
-    # エージェントに送信
+    # シャットダウン要求時は新規送信を開始しない
+    if [[ "$_SHUTDOWN_REQUESTED" == true ]]; then
+        log_warn "シャットダウン要求中のため送信をスキップ: $file"
+        return 0
+    fi
+
+    # エージェントに送信（開始後は完了まで中断しない）
     if send_to_agent "$queue_name" "$instruction"; then
         # 配信成功: status=delivered に更新
         sed_inplace 's/^status:.*/status: delivered/' "$file" 2>/dev/null || \
@@ -590,7 +604,7 @@ normalize_filename() {
     if [[ -f "$new_path" ]]; then
         local suffix=1
         while [[ -f "${dir}/${msg_type}_${epoch_usec}_${suffix}.yaml" ]]; do
-            ((suffix++))
+            suffix=$((suffix + 1))
         done
         new_path="${dir}/${msg_type}_${epoch_usec}_${suffix}.yaml"
     fi
@@ -728,11 +742,12 @@ monitor_queues() {
     local poll_count=0
     local SYNC_INTERVAL=30    # 30 × 10秒 = ~5分
 
-    while true; do
+    while [[ "$_SHUTDOWN_REQUESTED" != true ]]; do
         # tmuxセッション生存チェック
         if ! tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
             log_warn "tmux セッション '$TMUX_SESSION' が消滅しました。監視を終了します"
-            exit 0
+            _SHUTDOWN_REQUESTED=true
+            break
         fi
 
         # Leader キュー
@@ -769,13 +784,28 @@ monitor_queues() {
 
         # 定期的にダッシュボードから日次レポートに同期（~5分ごと）
         poll_count=$((poll_count + 1))
-        if (( poll_count % SYNC_INTERVAL == 0 )); then
+        if [[ $((poll_count % SYNC_INTERVAL)) -eq 0 ]]; then
             _sync_dashboard_to_reports &
             _refresh_bot_token_cache &
         fi
 
-        sleep "$POLL_INTERVAL"
+        # SIGHUP による設定リロード（フラグベース遅延実行）
+        if [[ "$_RELOAD_REQUESTED" == true ]]; then
+            _RELOAD_REQUESTED=false
+            log_info "設定リロード実行中..."
+            load_config || log_warn "設定リロード失敗"
+            log_info "設定リロード完了"
+        fi
+
+        # sleep分割: SIGTERM応答性改善（最大1秒以内に停止可能）
+        local i=0
+        while [[ $i -lt $POLL_INTERVAL ]] && [[ "$_SHUTDOWN_REQUESTED" != true ]]; do
+            sleep 1
+            i=$((i + 1))
+        done
     done
+
+    exit "${_EXIT_CODE:-0}"
 }
 
 # =============================================================================
@@ -845,9 +875,46 @@ main() {
         exit 1
     fi
 
-    # グレースフル停止用の trap
-    trap 'log_info "シグナル受信: 停止します"; exit 0' SIGTERM SIGINT
-    trap 'log_info "キュー監視を終了しました"' EXIT
+    # SIGHUP ハンドラ（フラグベース遅延リロード）
+    # trap内で直接load_config()を呼ぶと、scan_queue()実行中に
+    # 設定変更の競合が発生するリスクがあるため、
+    # フラグを立てるだけにしてメインループ内で安全にリロードする
+    _handle_sighup() {
+        log_info "SIGHUP受信: リロード予約"
+        _RELOAD_REQUESTED=true
+    }
+
+    # グレースフル停止: フラグベース（trap内でexit()を呼ばない）
+    # scan_queue()/send_to_agent()完了を待ってから安全に停止する
+    graceful_shutdown() {
+        _SHUTDOWN_SIGNAL="$1"
+        _SHUTDOWN_REQUESTED=true
+        _EXIT_CODE=$((128 + $1))
+        log_info "シグナル受信 (${1}): 安全に停止します"
+    }
+    trap 'graceful_shutdown 15' SIGTERM
+    trap 'graceful_shutdown 2' SIGINT
+    trap '_handle_sighup' SIGHUP
+
+    # EXIT trap: 終了理由をログに記録 + orphanプロセス防止
+    cleanup_and_log() {
+        local exit_code=$?
+        [[ $exit_code -eq 0 ]] && exit_code=${_EXIT_CODE:-0}
+        # バックグラウンドプロセスのクリーンアップ
+        kill "$(jobs -p)" 2>/dev/null
+        wait 2>/dev/null
+        if [[ -n "$_SHUTDOWN_SIGNAL" ]]; then
+            log_info "キュー監視 終了: シグナル${_SHUTDOWN_SIGNAL}による停止"
+        elif [[ $exit_code -eq 0 ]]; then
+            log_info "キュー監視 終了: 正常終了"
+        elif [[ $exit_code -gt 128 ]]; then
+            local sig=$((exit_code - 128))
+            log_warn "キュー監視 終了: 未捕捉シグナル$(kill -l "$sig" 2>/dev/null || echo UNKNOWN)"
+        else
+            log_error "キュー監視 終了: 異常終了 (exit_code=$exit_code)"
+        fi
+    }
+    trap cleanup_and_log EXIT
 
     log_info "tmux セッション: $TMUX_SESSION"
 

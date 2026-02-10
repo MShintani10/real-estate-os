@@ -1319,17 +1319,17 @@ run_daemon() {
             if [[ $refresh_counter -ge $PATTERN_REFRESH_INTERVAL ]]; then
                 refresh_counter=0
                 log_info "パターンリフレッシュ実行中..."
-                expand_patterns "${REPO_PATTERNS[@]}"
+                expand_patterns "${REPO_PATTERNS[@]}" || log_warn "パターンリフレッシュ失敗、前回のリストを維持"
                 log_info "現在の監視対象: ${REPOSITORIES[*]}"
             fi
         fi
 
-        process_events
+        process_events || log_warn "process_events failed, continuing..."
 
         # 定期的に古いイベントをクリーンアップ
-        cleanup_old_events
+        cleanup_old_events || log_warn "cleanup_old_events failed, continuing..."
 
-        sleep "$POLL_INTERVAL"
+        sleep "$POLL_INTERVAL" || true
     done
 }
 

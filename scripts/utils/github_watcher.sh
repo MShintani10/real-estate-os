@@ -1351,7 +1351,7 @@ run_daemon() {
         local i=0
         while [[ $i -lt $POLL_INTERVAL ]] && [[ "$_SHUTDOWN_REQUESTED" != true ]]; do
             sleep 1
-            ((i++))
+            i=$((i + 1))
         done
     done
 

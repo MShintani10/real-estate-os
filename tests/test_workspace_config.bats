@@ -322,3 +322,45 @@ YAML
     # github-app.yaml はコピーされない
     [[ ! -f "$dest/github-app.yaml" ]]
 }
+
+# =============================================================================
+# TC-21〜TC-23: setup_workspace() .ignite/ 自動検出テスト
+# =============================================================================
+
+@test "TC-21: setup_workspace - CWDに.ignite/あり → CWDがWORKSPACE_DIR" {
+    local test_ws="$TEST_TEMP_DIR/ws_detect"
+    mkdir -p "$test_ws/.ignite"
+    WORKSPACE_DIR=""
+
+    # CWDを一時的に変更して検出テスト
+    pushd "$test_ws" > /dev/null
+    setup_workspace 2>/dev/null
+    popd > /dev/null
+
+    [[ "$WORKSPACE_DIR" == "$test_ws" ]]
+}
+
+@test "TC-22: setup_workspace - CWDに.ignite/なし → DEFAULT_WORKSPACE_DIR" {
+    local test_ws="$TEST_TEMP_DIR/ws_no_ignite"
+    mkdir -p "$test_ws"
+    WORKSPACE_DIR=""
+
+    pushd "$test_ws" > /dev/null
+    setup_workspace 2>/dev/null
+    popd > /dev/null
+
+    [[ "$WORKSPACE_DIR" == "$DEFAULT_WORKSPACE_DIR" ]]
+}
+
+@test "TC-23: setup_workspace - -w指定済み → 検出スキップ" {
+    local test_ws="$TEST_TEMP_DIR/ws_explicit"
+    mkdir -p "$test_ws/.ignite"
+    WORKSPACE_DIR="/explicitly/set/path"
+
+    pushd "$test_ws" > /dev/null
+    setup_workspace 2>/dev/null
+    popd > /dev/null
+
+    # -w で指定された値がそのまま維持される
+    [[ "$WORKSPACE_DIR" == "/explicitly/set/path" ]]
+}

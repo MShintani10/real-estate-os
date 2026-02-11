@@ -42,10 +42,17 @@ setup_session_name() {
     fi
 }
 
-# ワークスペースの設定（指定がなければデフォルト）
+# ワークスペースの設定（指定がなければ .ignite/ 自動検出 → デフォルト）
 setup_workspace() {
     if [[ -z "$WORKSPACE_DIR" ]]; then
-        WORKSPACE_DIR=$(get_default_workspace)
+        # CWD に .ignite/ があれば自動検出（Git方式）
+        if [[ -d "$(pwd)/.ignite" ]]; then
+            WORKSPACE_DIR="$(pwd)"
+            log_info "ワークスペース検出: $WORKSPACE_DIR"
+        else
+            WORKSPACE_DIR=$(get_default_workspace)
+            log_info "デフォルトワークスペース: $WORKSPACE_DIR"
+        fi
     fi
 }
 

@@ -118,10 +118,11 @@ copy_main_script() {
     chmod +x "$BUILD_DIR/share/scripts/ignite"
     print_success "scripts/ignite をコピーしました"
 
-    # scripts/lib/ モジュール
+    # scripts/lib/ モジュール（.sh + .py）
     cp "$SCRIPT_DIR/lib"/*.sh "$BUILD_DIR/share/scripts/lib/"
+    cp "$SCRIPT_DIR/lib"/*.py "$BUILD_DIR/share/scripts/lib/" 2>/dev/null || true
     local count
-    count=$(ls -1 "$BUILD_DIR/share/scripts/lib"/*.sh 2>/dev/null | wc -l)
+    count=$(ls -1 "$BUILD_DIR/share/scripts/lib"/*.sh "$BUILD_DIR/share/scripts/lib"/*.py 2>/dev/null | wc -l)
     print_success "$count 個の lib モジュールをコピーしました"
 
     # scripts/schema.sql（メモリDB スキーマ）

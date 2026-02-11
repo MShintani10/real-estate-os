@@ -250,13 +250,14 @@ install_data() {
         fi
     fi
 
-    # scripts/lib/ モジュール
+    # scripts/lib/ モジュール（.sh + .py）
     local source_lib="$source_scripts/lib"
     if [[ -d "$source_lib" ]]; then
         mkdir -p "$DATA_DIR/scripts/lib"
         cp "$source_lib"/*.sh "$DATA_DIR/scripts/lib/"
+        cp "$source_lib"/*.py "$DATA_DIR/scripts/lib/" 2>/dev/null || true
         local count
-        count=$(ls -1 "$DATA_DIR/scripts/lib"/*.sh 2>/dev/null | wc -l)
+        count=$(ls -1 "$DATA_DIR/scripts/lib"/*.sh "$DATA_DIR/scripts/lib"/*.py 2>/dev/null | wc -l)
         if [[ "$UPGRADE" == "true" ]]; then
             print_success "scripts/lib ($count モジュール) を $DATA_DIR/scripts/lib にアップグレードしました"
         else

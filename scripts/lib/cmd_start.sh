@@ -68,6 +68,9 @@ cmd_start() {
     # ワークスペースが未指定の場合はデフォルト
     setup_workspace
 
+    # ワークスペース固有設定の検出
+    setup_workspace_config "$WORKSPACE_DIR"
+
     # ワーカー数の決定
     if [[ -z "$worker_count" ]]; then
         worker_count=$(get_worker_count)

@@ -164,6 +164,72 @@ get_config() {
     echo "${value:-$default}"
 }
 
+# =============================================================================
+# Workspace Config（.ignite/ ディレクトリ方式）
+# =============================================================================
+
+# ワークスペース設定ディレクトリ（setup_workspace_config() で設定）
+WORKSPACE_CONFIG_DIR=""
+
+# setup_workspace_config - ワークスペース固有の .ignite/ を検出・設定
+# Usage: setup_workspace_config <workspace_dir>
+# .ignite/ が存在する場合は WORKSPACE_CONFIG_DIR を設定
+setup_workspace_config() {
+    local ws_dir="${1:-$WORKSPACE_DIR}"
+    local ignite_dir="${ws_dir}/.ignite"
+
+    if [[ -d "$ignite_dir" ]]; then
+        WORKSPACE_CONFIG_DIR="$ignite_dir"
+        log_info "ワークスペース設定を検出: $ignite_dir"
+    else
+        WORKSPACE_CONFIG_DIR=""
+    fi
+}
+
+# resolve_config - ワークスペース > グローバルの2層フォールバックでconfigファイルを解決
+# Usage: resolve_config <filename>
+# Returns: 解決されたファイルのフルパス（stdout）
+# Exit code: 0=見つかった, 1=見つからない
+#
+# 優先順位:
+#   1. $WORKSPACE_CONFIG_DIR/<filename>  （ワークスペース固有）
+#   2. $IGNITE_CONFIG_DIR/<filename>      （グローバル）
+#
+# 例外: github-app.yaml は常にグローバルから読み込み（credentials保護）
+resolve_config() {
+    local filename="$1"
+
+    # credentials はグローバル固定（セキュリティ上の理由）
+    if [[ "$filename" == "github-app.yaml" ]]; then
+        local global_path="$IGNITE_CONFIG_DIR/$filename"
+        if [[ -f "$global_path" ]]; then
+            echo "$global_path"
+            return 0
+        fi
+        # XDG fallback
+        local xdg_path="${XDG_CONFIG_HOME:-$HOME/.config}/ignite/$filename"
+        if [[ -f "$xdg_path" ]]; then
+            echo "$xdg_path"
+            return 0
+        fi
+        return 1
+    fi
+
+    # ワークスペース設定を優先
+    if [[ -n "$WORKSPACE_CONFIG_DIR" ]] && [[ -f "$WORKSPACE_CONFIG_DIR/$filename" ]]; then
+        echo "$WORKSPACE_CONFIG_DIR/$filename"
+        return 0
+    fi
+
+    # グローバルにフォールバック
+    if [[ -f "$IGNITE_CONFIG_DIR/$filename" ]]; then
+        echo "$IGNITE_CONFIG_DIR/$filename"
+        return 0
+    fi
+
+    return 1
+}
+
 # system.yaml から読み込むグローバル設定
 TMUX_WINDOW_NAME=$(get_config tmux window_name "ignite")
 DEFAULT_MESSAGE_PRIORITY=$(get_config defaults message_priority "normal")

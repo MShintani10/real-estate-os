@@ -454,23 +454,68 @@ cmd_watcher() {
     local action="${1:-}"
     shift 2>/dev/null || true
 
+    # ワークスペース解決（PIDファイル参照に必要）
+    setup_session_name
+    setup_workspace
+
     case "$action" in
         start)
             print_info "GitHub Watcherを起動します..."
-            "$IGNITE_SCRIPTS_DIR/utils/github_watcher.sh" &
-            print_success "GitHub Watcherをバックグラウンドで起動しました"
+            # 既存プロセスの停止（PIDベース）
+            if [[ -f "$WORKSPACE_DIR/github_watcher.pid" ]]; then
+                local old_pid
+                old_pid=$(cat "$WORKSPACE_DIR/github_watcher.pid")
+                if kill -0 "$old_pid" 2>/dev/null; then
+                    kill "$old_pid" 2>/dev/null || true
+                    sleep 1
+                fi
+                rm -f "$WORKSPACE_DIR/github_watcher.pid"
+            fi
+            local watcher_log="$WORKSPACE_DIR/logs/github_watcher.log"
+            mkdir -p "$WORKSPACE_DIR/logs"
+            export IGNITE_WATCHER_CONFIG="$IGNITE_CONFIG_DIR/github-watcher.yaml"
+            export IGNITE_WORKSPACE_DIR="$WORKSPACE_DIR"
+            export IGNITE_CONFIG_DIR="$IGNITE_CONFIG_DIR"
+            export IGNITE_TMUX_SESSION="${SESSION_NAME:-}"
+            "$IGNITE_SCRIPTS_DIR/utils/github_watcher.sh" >> "$watcher_log" 2>&1 &
+            local watcher_pid=$!
+            echo "$watcher_pid" > "$WORKSPACE_DIR/github_watcher.pid"
+            print_success "GitHub Watcherをバックグラウンドで起動しました (PID: $watcher_pid)"
             ;;
         stop)
             print_info "GitHub Watcherを停止します..."
-            pkill -f "github_watcher.sh" 2>/dev/null || true
-            print_success "GitHub Watcherを停止しました"
+            if [[ -f "$WORKSPACE_DIR/github_watcher.pid" ]]; then
+                local watcher_pid
+                watcher_pid=$(cat "$WORKSPACE_DIR/github_watcher.pid")
+                if kill -0 "$watcher_pid" 2>/dev/null; then
+                    kill "$watcher_pid" 2>/dev/null || true
+                    local wait_count=0
+                    while kill -0 "$watcher_pid" 2>/dev/null && [[ $wait_count -lt 6 ]]; do
+                        sleep 0.5
+                        wait_count=$((wait_count + 1))
+                    done
+                    if kill -0 "$watcher_pid" 2>/dev/null; then
+                        kill -9 "$watcher_pid" 2>/dev/null || true
+                    fi
+                    print_success "GitHub Watcherを停止しました"
+                else
+                    print_warning "GitHub Watcher (PID: $watcher_pid) は既に停止しています"
+                fi
+                rm -f "$WORKSPACE_DIR/github_watcher.pid"
+            else
+                print_warning "PIDファイルが見つかりません"
+            fi
             ;;
         status)
-            if pgrep -f "github_watcher.sh" > /dev/null; then
-                print_success "GitHub Watcher: 実行中"
-                pgrep -f "github_watcher.sh" | while read -r pid; do
-                    echo "  PID: $pid"
-                done
+            if [[ -f "$WORKSPACE_DIR/github_watcher.pid" ]]; then
+                local watcher_pid
+                watcher_pid=$(cat "$WORKSPACE_DIR/github_watcher.pid")
+                if kill -0 "$watcher_pid" 2>/dev/null; then
+                    print_success "GitHub Watcher: 実行中 (PID: $watcher_pid)"
+                else
+                    print_warning "GitHub Watcher: 停止中 (stale PID: $watcher_pid)"
+                    rm -f "$WORKSPACE_DIR/github_watcher.pid"
+                fi
             else
                 print_warning "GitHub Watcher: 停止中"
             fi

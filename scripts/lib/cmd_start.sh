@@ -217,21 +217,23 @@ EOF
     print_success "workspace初期化完了"
     echo ""
 
-    # 旧デーモンプロセスをクリーンアップ（前セッションの残骸対策）
+    # 旧デーモンプロセスをクリーンアップ（PIDファイルベース・セッション固有）
     if [[ -f "$WORKSPACE_DIR/github_watcher.pid" ]]; then
         local old_pid
         old_pid=$(cat "$WORKSPACE_DIR/github_watcher.pid")
-        kill "$old_pid" 2>/dev/null || true
+        if kill -0 "$old_pid" 2>/dev/null; then
+            kill "$old_pid" 2>/dev/null || true
+        fi
         rm -f "$WORKSPACE_DIR/github_watcher.pid"
     fi
     if [[ -f "$WORKSPACE_DIR/queue_monitor.pid" ]]; then
         local old_pid
         old_pid=$(cat "$WORKSPACE_DIR/queue_monitor.pid")
-        kill "$old_pid" 2>/dev/null || true
+        if kill -0 "$old_pid" 2>/dev/null; then
+            kill "$old_pid" 2>/dev/null || true
+        fi
         rm -f "$WORKSPACE_DIR/queue_monitor.pid"
     fi
-    pkill -f "queue_monitor.sh" 2>/dev/null || true
-    pkill -f "github_watcher.sh" 2>/dev/null || true
     sleep "$(get_delay process_cleanup 1)"
 
     # tmuxセッション作成

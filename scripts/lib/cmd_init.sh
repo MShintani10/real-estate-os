@@ -9,6 +9,7 @@ cmd_init() {
     local target_dir=""
     local force=false
     local minimal=false
+    local migrate=false
 
     # オプション解析
     while [[ $# -gt 0 ]]; do
@@ -23,6 +24,10 @@ cmd_init() {
                 ;;
             --minimal)
                 minimal=true
+                shift
+                ;;
+            --migrate)
+                migrate=true
                 shift
                 ;;
             -h|--help)
@@ -64,8 +69,8 @@ cmd_init() {
     echo -e "${BLUE}.ignite ディレクトリ:${NC} $ignite_dir"
     echo ""
 
-    # 既存チェック
-    if [[ -d "$ignite_dir" ]] && [[ "$force" == false ]]; then
+    # 既存チェック（--migrate 時は --force 不要で上書き許可）
+    if [[ -d "$ignite_dir" ]] && [[ "$force" == false ]] && [[ "$migrate" == false ]]; then
         print_warning ".ignite/ ディレクトリは既に存在します: $ignite_dir"
         echo -e "上書きする場合は ${YELLOW}--force${NC} オプションを使用してください。"
         exit 1
@@ -75,34 +80,40 @@ cmd_init() {
     print_info ".ignite/ ディレクトリを作成中..."
     mkdir -p "$ignite_dir"
 
-    # .gitignore 生成（.ignite/ 内）
+    # .gitignore 生成（.ignite/ 内 — credentials + 秘密鍵を保護）
     cat > "$ignite_dir/.gitignore" <<'GITIGNORE'
 # IGNITE workspace config
-# credentials はグローバル設定（~/.config/ignite/）で管理するため除外不要
-# ワークスペース設定はリポジトリにコミット可能
+# credentials・秘密鍵はコミットしない
+github-app.yaml
+*.pem
 
 # ローカルのみの設定（必要に応じてコメント解除）
 # system.yaml
 # github-watcher.yaml
 GITIGNORE
-    print_success ".gitignore を生成しました"
+    print_success ".gitignore を生成しました（github-app.yaml, *.pem を除外）"
 
-    # テンプレート設定ファイルのコピー
-    if [[ "$minimal" == true ]]; then
-        # --minimal: system.yaml のみ
-        _copy_config_template "system.yaml" "$ignite_dir"
+    # --migrate: ~/.config/ignite/ から .ignite/ へ移行
+    if [[ "$migrate" == true ]]; then
+        _cmd_init_migrate "$ignite_dir"
     else
-        # 通常: github-app.yaml 以外の全設定ファイルをコピー
-        _copy_config_template "system.yaml" "$ignite_dir"
-        _copy_config_template "characters.yaml" "$ignite_dir"
-        _copy_config_template "pricing.yaml" "$ignite_dir"
+        # テンプレート設定ファイルのコピー
+        if [[ "$minimal" == true ]]; then
+            # --minimal: system.yaml のみ
+            _copy_config_template "system.yaml" "$ignite_dir"
+        else
+            # 通常: 全設定ファイルをコピー
+            _copy_config_template "system.yaml" "$ignite_dir"
+            _copy_config_template "characters.yaml" "$ignite_dir"
+            _copy_config_template "pricing.yaml" "$ignite_dir"
 
-        # github-watcher.yaml は example があればコピー
-        if [[ -f "$IGNITE_CONFIG_DIR/github-watcher.yaml" ]]; then
-            _copy_config_template "github-watcher.yaml" "$ignite_dir"
-        elif [[ -f "$IGNITE_CONFIG_DIR/github-watcher.yaml.example" ]]; then
-            cp "$IGNITE_CONFIG_DIR/github-watcher.yaml.example" "$ignite_dir/github-watcher.yaml"
-            print_success "github-watcher.yaml をexampleからコピーしました"
+            # github-watcher.yaml は example があればコピー
+            if [[ -f "$IGNITE_CONFIG_DIR/github-watcher.yaml" ]]; then
+                _copy_config_template "github-watcher.yaml" "$ignite_dir"
+            elif [[ -f "$IGNITE_CONFIG_DIR/github-watcher.yaml.example" ]]; then
+                cp "$IGNITE_CONFIG_DIR/github-watcher.yaml.example" "$ignite_dir/github-watcher.yaml"
+                print_success "github-watcher.yaml をexampleからコピーしました"
+            fi
         fi
     fi
 
@@ -110,6 +121,10 @@ GITIGNORE
     print_info "標準ディレクトリを作成中..."
     mkdir -p "$target_dir/workspace"/{queue,context,logs,state,repos}
     print_success "workspace/ ディレクトリを作成しました"
+
+    # .ignite/ パーミッション設定（credentials 保護）
+    chmod 700 "$ignite_dir"
+    print_success ".ignite/ パーミッションを 700 に設定しました"
 
     # 完了メッセージ
     echo ""
@@ -131,31 +146,88 @@ GITIGNORE
     echo "      ├── state/"
     echo "      └── repos/"
     echo ""
-    echo -e "${YELLOW}注意:${NC} github-app.yaml（credentials）はグローバル設定"
-    echo -e "（${CYAN}~/.config/ignite/github-app.yaml${NC}）で管理されます。"
-    echo -e "ワークスペースにはコピーされません（セキュリティ保護）。"
+    echo -e "${YELLOW}注意:${NC} github-app.yaml（credentials）は .ignite/.gitignore で"
+    echo -e "自動的にGit追跡から除外されます（セキュリティ保護）。"
     echo ""
     echo "次のステップ:"
     echo -e "  1. 設定を編集: ${YELLOW}vi ${ignite_dir}/system.yaml${NC}"
-    echo -e "  2. 起動: ${YELLOW}ignite start -w ${target_dir}/workspace${NC}"
+    echo -e "  2. 起動: ${YELLOW}ignite start${NC}（CWDから .ignite/ を自動検出）"
 }
 
-# _copy_config_template - グローバル設定からワークスペースにコピー
+# _cmd_init_migrate - ~/.config/ignite/ → .ignite/ へ設定を移行
+# Usage: _cmd_init_migrate <dest_ignite_dir>
+_cmd_init_migrate() {
+    local dest_dir="$1"
+    local legacy_dir="${HOME}/.config/ignite"
+
+    if [[ ! -d "$legacy_dir" ]]; then
+        print_warning "移行元ディレクトリが見つかりません: $legacy_dir"
+        print_info "テンプレートから新規初期化します"
+        _copy_config_template "system.yaml" "$dest_dir"
+        return 0
+    fi
+
+    # 移行対象ファイル一覧
+    print_header "移行対象ファイル"
+    echo ""
+    local files_to_migrate=()
+    local file
+    for file in "$legacy_dir"/*.yaml "$legacy_dir"/*.yaml.example; do
+        [[ -f "$file" ]] || continue
+        local filename
+        filename=$(basename "$file")
+        # .install_paths は移行しない
+        [[ "$filename" == ".install_paths" ]] && continue
+        files_to_migrate+=("$filename")
+        echo -e "  ${BLUE}→${NC} $filename"
+    done
+
+    if [[ ${#files_to_migrate[@]} -eq 0 ]]; then
+        print_warning "移行対象のファイルがありません"
+        return 0
+    fi
+
+    echo ""
+    echo -e "${YELLOW}移行元:${NC} $legacy_dir"
+    echo -e "${YELLOW}移行先:${NC} $dest_dir"
+    echo ""
+
+    # 対話確認（非対話環境ではスキップ）
+    if [[ -t 0 ]]; then
+        read -p "上記ファイルを移行しますか? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_info "移行をキャンセルしました"
+            return 0
+        fi
+    else
+        print_info "非対話環境: 自動的に移行を実行します"
+    fi
+
+    # コピー実行
+    for filename in "${files_to_migrate[@]}"; do
+        cp "$legacy_dir/$filename" "$dest_dir/$filename"
+        print_success "$filename を移行しました"
+    done
+
+    echo ""
+    print_success "移行完了 (${#files_to_migrate[@]} ファイル)"
+    echo ""
+    echo -e "${YELLOW}注意:${NC} 元ディレクトリ ($legacy_dir) は自動削除されません。"
+    echo -e "確認後に手動で削除してください: ${YELLOW}rm -rf $legacy_dir${NC}"
+}
+
+# _copy_config_template - テンプレート設定からワークスペースにコピー
 # Usage: _copy_config_template <filename> <dest_dir>
 _copy_config_template() {
     local filename="$1"
     local dest_dir="$2"
 
-    # github-app.yaml は絶対にコピーしない
-    if [[ "$filename" == "github-app.yaml" ]]; then
-        return 0
-    fi
-
     if [[ -f "$IGNITE_CONFIG_DIR/$filename" ]]; then
         cp "$IGNITE_CONFIG_DIR/$filename" "$dest_dir/$filename"
         print_success "$filename をコピーしました"
     else
-        print_warning "$filename がグローバル設定に見つかりません（スキップ）"
+        print_warning "$filename がテンプレート設定に見つかりません（スキップ）"
     fi
 }
 
@@ -164,23 +236,25 @@ _cmd_init_help() {
     echo "使用方法: ignite init [OPTIONS] [WORKSPACE_DIR]"
     echo ""
     echo "ワークスペース固有の .ignite/ 設定ディレクトリを初期化します。"
-    echo "グローバル設定（~/.config/ignite/）をテンプレートとしてコピーし、"
-    echo "プロジェクトごとにカスタマイズ可能にします。"
+    echo "テンプレート設定をコピーし、プロジェクトごとにカスタマイズ可能にします。"
     echo ""
     echo "オプション:"
     echo "  -w, --workspace <dir>   初期化するディレクトリを指定"
     echo "  -f, --force             既存の .ignite/ を上書き"
     echo "  --minimal               system.yaml のみコピー（最小構成）"
+    echo "  --migrate               ~/.config/ignite/ から設定を移行"
     echo "  -h, --help              この使い方を表示"
     echo ""
     echo "例:"
     echo "  ignite init                    # カレントディレクトリに初期化"
     echo "  ignite init /path/to/project   # 指定ディレクトリに初期化"
     echo "  ignite init --minimal          # 最小構成で初期化"
+    echo "  ignite init --migrate          # グローバル設定から移行"
     echo "  ignite init -f                 # 既存設定を上書き"
     echo ""
     echo "設計:"
-    echo "  - .ignite/ 内の設定はグローバル設定より優先されます"
-    echo "  - github-app.yaml（credentials）はセキュリティ上、グローバル固定です"
+    echo "  - .ignite/ が唯一の設定ソースです"
+    echo "  - github-app.yaml は .gitignore で自動除外されます"
+    echo "  - *.pem（秘密鍵）も .gitignore で自動除外されます"
     echo "  - .ignite/ はリポジトリにコミット可能です（チーム共有用）"
 }

@@ -7,37 +7,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # =============================================================================
-# XDG パス解決（インストールモード vs 開発モード）
+# パス解決（PROJECT_ROOT ベース）
 # =============================================================================
 
-# XDG Base Directory paths
-XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
-XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
-
-# インストールモード判定: ~/.config/ignite/.install_paths が存在するか
-INSTALLED_MODE=false
-if [[ -f "$XDG_CONFIG_HOME/ignite/.install_paths" ]]; then
-    INSTALLED_MODE=true
-fi
-
-# パス解決
-if [[ "$INSTALLED_MODE" == "true" ]]; then
-    # インストールモード: XDGパスを使用
-    IGNITE_CONFIG_DIR="$XDG_CONFIG_HOME/ignite"
-    IGNITE_DATA_DIR="$XDG_DATA_HOME/ignite"
-    IGNITE_INSTRUCTIONS_DIR="$IGNITE_DATA_DIR/instructions"
-    IGNITE_CHARACTERS_DIR="$IGNITE_DATA_DIR/characters"
-    IGNITE_SCRIPTS_DIR="$IGNITE_DATA_DIR/scripts"
-    DEFAULT_WORKSPACE_DIR="$HOME/ignite-workspace"
-else
-    # 開発モード: PROJECT_ROOTを使用
-    IGNITE_CONFIG_DIR="$PROJECT_ROOT/config"
-    IGNITE_DATA_DIR="$PROJECT_ROOT"
-    IGNITE_INSTRUCTIONS_DIR="$PROJECT_ROOT/instructions"
-    IGNITE_CHARACTERS_DIR="$PROJECT_ROOT/characters"
-    IGNITE_SCRIPTS_DIR="$PROJECT_ROOT/scripts"
-    DEFAULT_WORKSPACE_DIR="$PROJECT_ROOT/workspace"
-fi
+# 設定テンプレートディレクトリ（ignite init のコピー元）
+IGNITE_CONFIG_DIR="$PROJECT_ROOT/config"
+IGNITE_DATA_DIR="$PROJECT_ROOT"
+IGNITE_INSTRUCTIONS_DIR="$PROJECT_ROOT/instructions"
+IGNITE_CHARACTERS_DIR="$PROJECT_ROOT/characters"
+IGNITE_SCRIPTS_DIR="$PROJECT_ROOT/scripts"
+DEFAULT_WORKSPACE_DIR="$PROJECT_ROOT/workspace"
 
 # セッション名とワークスペース（後でコマンドラインで上書き可能）
 SESSION_NAME="${SESSION_NAME:-}"
@@ -165,68 +144,32 @@ get_config() {
 }
 
 # =============================================================================
-# Workspace Config（.ignite/ ディレクトリ方式）
+# Workspace Config（.ignite/ 一本化）
 # =============================================================================
 
-# ワークスペース設定ディレクトリ（setup_workspace_config() で設定）
-WORKSPACE_CONFIG_DIR=""
-
-# setup_workspace_config - ワークスペース固有の .ignite/ を検出・設定
+# setup_workspace_config - .ignite/ を検出し IGNITE_CONFIG_DIR を切り替え
 # Usage: setup_workspace_config <workspace_dir>
-# .ignite/ が存在する場合は WORKSPACE_CONFIG_DIR を設定
+# .ignite/ が存在する場合は IGNITE_CONFIG_DIR を .ignite/ に更新
 setup_workspace_config() {
     local ws_dir="${1:-$WORKSPACE_DIR}"
     local ignite_dir="${ws_dir}/.ignite"
 
     if [[ -d "$ignite_dir" ]]; then
-        WORKSPACE_CONFIG_DIR="$ignite_dir"
+        IGNITE_CONFIG_DIR="$ignite_dir"
         log_info "ワークスペース設定を検出: $ignite_dir"
-    else
-        WORKSPACE_CONFIG_DIR=""
     fi
 }
 
-# resolve_config - ワークスペース > グローバルの2層フォールバックでconfigファイルを解決
+# resolve_config - IGNITE_CONFIG_DIR から設定ファイルを解決（1層）
 # Usage: resolve_config <filename>
 # Returns: 解決されたファイルのフルパス（stdout）
 # Exit code: 0=見つかった, 1=見つからない
-#
-# 優先順位:
-#   1. $WORKSPACE_CONFIG_DIR/<filename>  （ワークスペース固有）
-#   2. $IGNITE_CONFIG_DIR/<filename>      （グローバル）
-#
-# 例外: github-app.yaml は常にグローバルから読み込み（credentials保護）
 resolve_config() {
     local filename="$1"
-
-    # credentials はグローバル固定（セキュリティ上の理由）
-    if [[ "$filename" == "github-app.yaml" ]]; then
-        local global_path="$IGNITE_CONFIG_DIR/$filename"
-        if [[ -f "$global_path" ]]; then
-            echo "$global_path"
-            return 0
-        fi
-        # XDG fallback
-        local xdg_path="${XDG_CONFIG_HOME:-$HOME/.config}/ignite/$filename"
-        if [[ -f "$xdg_path" ]]; then
-            echo "$xdg_path"
-            return 0
-        fi
-        return 1
-    fi
-
-    # ワークスペース設定を優先
-    if [[ -n "$WORKSPACE_CONFIG_DIR" ]] && [[ -f "$WORKSPACE_CONFIG_DIR/$filename" ]]; then
-        echo "$WORKSPACE_CONFIG_DIR/$filename"
+    if [[ -f "${IGNITE_CONFIG_DIR}/${filename}" ]]; then
+        echo "${IGNITE_CONFIG_DIR}/${filename}"
         return 0
     fi
-
-    # グローバルにフォールバック
-    if [[ -f "$IGNITE_CONFIG_DIR/$filename" ]]; then
-        echo "$IGNITE_CONFIG_DIR/$filename"
-        return 0
-    fi
-
     return 1
 }
 

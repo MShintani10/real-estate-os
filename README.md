@@ -130,7 +130,7 @@ tar xzf ignite-*.tar.gz
 > export PATH="$HOME/.local/bin:$PATH"
 > ```
 
-> **Note**: Linux および Windows (WSL2) に対応しています。Windows ユーザーは [Windows (WSL2) セットアップガイド](docs/windows-setup.ja.md)（[English](docs/windows-setup.md)）を参照してください。macOS ユーザーは「開発モード（ソースから実行）」を参照してください。
+> **Note**: Linux および Windows (WSL2) に対応しています。Windows ユーザーは [Windows (WSL2) セットアップガイド](docs/windows-setup.md)（[English](docs/windows-setup_en.md)）を参照してください。macOS ユーザーは「開発モード（ソースから実行）」を参照してください。
 
 ### アップグレード
 
@@ -1070,7 +1070,7 @@ GitHub の Issue やPR のコメントで：
 - **GitHub App導入**: [docs/github-app-installation.md](docs/github-app-installation.md) - GitHub App（ignite-gh-app）のインストール手順
 - **GitHub App設定**: [docs/github-app-setup.md](docs/github-app-setup.md) - Bot用GitHub Appの作成手順（開発者向け）
 - **GitHub Watcher**: [docs/github-watcher.md](docs/github-watcher.md) - GitHubイベント監視システムの使い方
-- **Windows (WSL2) セットアップ**: [docs/windows-setup.ja.md](docs/windows-setup.ja.md)（[English](docs/windows-setup.md)）- WindowsでのWSL2環境構築手順
+- **Windows (WSL2) セットアップ**: [docs/windows-setup.md](docs/windows-setup.md)（[English](docs/windows-setup_en.md)）- WindowsでのWSL2環境構築手順
 
 ## 🤝 コントリビューション
 

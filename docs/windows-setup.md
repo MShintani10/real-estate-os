@@ -1,42 +1,42 @@
-# Windows (WSL2) Setup Guide
+# Windows (WSL2) セットアップガイド
 
-IGNITE runs with **full functionality on WSL2** with zero code changes. This guide walks you through setting up your Windows environment for IGNITE.
+IGNITEは **WSL2 上でコード変更なしに全機能が動作** します。このガイドでは、Windows環境でIGNITEを使うための手順を説明します。
 
-## Prerequisites
+## 前提条件
 
-| Requirement | Version |
-|-------------|---------|
-| Windows | 10 version 2004+ (Build 19041+) or Windows 11 |
-| WSL2 | Enabled (default on Windows 11) |
-| Ubuntu | 22.04 LTS or later (recommended) |
+| 要件 | バージョン |
+|------|-----------|
+| Windows | 10 version 2004以降 (Build 19041+) または Windows 11 |
+| WSL2 | 有効化済み（Windows 11ではデフォルトで有効） |
+| Ubuntu | 22.04 LTS 以降（推奨） |
 
-> **Note**: Windows Home edition is fully supported. Hyper-V is automatically enabled as part of the WSL2 installation.
+> **Note**: Windows Home エディションでも問題なく動作します。Hyper-Vは WSL2 のインストール時に自動的に有効化されます。
 
-## 1. Install WSL2
+## 1. WSL2 のインストール
 
-Open **PowerShell as Administrator** and run:
+**管理者権限のPowerShell** を開き、以下を実行します：
 
 ```powershell
 wsl --install
 ```
 
-This command:
-- Enables the WSL2 feature
-- Installs the default Linux distribution (Ubuntu)
+このコマンドにより以下が行われます：
+- WSL2 機能の有効化
+- デフォルトの Linux ディストリビューション（Ubuntu）のインストール
 
-Restart your computer when prompted.
+再起動を求められた場合は、PCを再起動してください。
 
-After restart, Ubuntu will launch automatically and ask you to create a username and password.
+再起動後、Ubuntu が自動的に起動し、ユーザー名とパスワードの設定を求められます。
 
-> **Tip**: If you already have WSL1, upgrade to WSL2:
+> **Tip**: 既に WSL1 をお使いの場合は、WSL2 にアップグレードしてください：
 > ```powershell
 > wsl --set-default-version 2
 > wsl --set-version Ubuntu 2
 > ```
 
-## 2. Configure .wslconfig (Recommended)
+## 2. .wslconfig の設定（推奨）
 
-Create or edit `%USERPROFILE%\.wslconfig` (e.g. `C:\Users\YourName\.wslconfig`):
+`%USERPROFILE%\.wslconfig`（例：`C:\Users\ユーザー名\.wslconfig`）を作成または編集します：
 
 ```ini
 [wsl2]
@@ -45,31 +45,31 @@ processors=4
 localhostForwarding=true
 ```
 
-Then restart WSL to apply:
+設定を反映するため、WSL を再起動します：
 
 ```powershell
 wsl --shutdown
 ```
 
-| Setting | Recommended | Description |
-|---------|-------------|-------------|
-| `memory` | 8GB+ | IGNITE runs multiple Claude Code processes (~300-500MB each) |
-| `processors` | 4+ | Parallel agent execution benefits from multiple cores |
-| `localhostForwarding` | true | Access WSL2 services from Windows browser |
+| 設定項目 | 推奨値 | 理由 |
+|---------|--------|------|
+| `memory` | 8GB以上 | IGNITEは複数のClaude Codeプロセスを実行（各約300-500MB） |
+| `processors` | 4以上 | エージェントの並列実行に複数コアが有効 |
+| `localhostForwarding` | true | Windows ブラウザから WSL2 のサービスにアクセス可能に |
 
-## 3. Install Required Software in WSL2
+## 3. 必要なソフトウェアのインストール
 
-Open your WSL2 Ubuntu terminal and run:
+WSL2 の Ubuntu ターミナルを開き、以下を実行します：
 
 ```bash
-# Update packages
+# パッケージを更新
 sudo apt update && sudo apt upgrade -y
 
-# Install required tools
+# 必要なツールをインストール
 sudo apt install -y tmux git jq curl
 
-# Install GitHub CLI
-# See: https://github.com/cli/cli/blob/trunk/docs/install_linux.md
+# GitHub CLI のインストール
+# 参考: https://github.com/cli/cli/blob/trunk/docs/install_linux.md
 (type -p wget >/dev/null || (sudo apt update && sudo apt-get install wget -y)) \
   && sudo mkdir -p -m 755 /etc/apt/keyrings \
   && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
@@ -79,59 +79,59 @@ sudo apt install -y tmux git jq curl
   && sudo apt update \
   && sudo apt install gh -y
 
-# Install yq (optional but recommended)
+# yq のインストール（任意だが推奨）
 sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq \
   && sudo chmod +x /usr/local/bin/yq
 
-# Authenticate with GitHub
+# GitHub 認証
 gh auth login
 ```
 
-Verify installations:
+インストールの確認：
 
 ```bash
 tmux -V          # tmux 3.x+
 git --version    # git 2.x+
 gh --version     # gh 2.x+
 jq --version     # jq 1.6+
-yq --version     # yq 4.x+ (optional)
+yq --version     # yq 4.x+（任意）
 ```
 
-## 4. Install Claude Code CLI
+## 4. Claude Code CLI のインストール
 
-Install Claude Code inside WSL2:
+WSL2 内で Claude Code をインストールします：
 
 ```bash
-# Install via npm (Node.js required)
+# npm でインストール（Node.js が必要）
 npm install -g @anthropic-ai/claude-code
 
-# Or install Node.js first if needed
+# Node.js が未インストールの場合は先にインストール
 curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
 sudo apt install -y nodejs
 npm install -g @anthropic-ai/claude-code
 ```
 
-Verify:
+確認：
 
 ```bash
 claude --version
 ```
 
-> **Note**: Claude Code CLI v2.1.34+ supports Windows natively (PowerShell + Git Bash), but running inside WSL2 provides the best experience for IGNITE, as it ensures full compatibility with tmux and Bash scripts.
+> **Note**: Claude Code CLI v2.1.34 以降は Windows にネイティブ対応（PowerShell + Git Bash）していますが、IGNITE では tmux や Bash スクリプトとの完全な互換性のため、WSL2 内での実行を推奨します。
 
-## 5. Install and Run IGNITE
+## 5. IGNITE のインストールと起動
 
 ```bash
-# Clone the repository (inside WSL2, NOT in /mnt/c/)
+# リポジトリをクローン（WSL2内で実行。/mnt/c/ は使わないこと）
 cd ~
 git clone https://github.com/myfinder/IGNITE.git
 cd IGNITE
 
-# Start IGNITE
+# IGNITE を起動
 ./scripts/ignite start
 ```
 
-Or install from a release:
+リリースからインストールする場合：
 
 ```bash
 gh release download --repo myfinder/IGNITE --pattern '*.tar.gz'
@@ -140,132 +140,132 @@ tar xzf ignite-*.tar.gz
 ignite start
 ```
 
-## 6. File System Performance Warning
+## 6. ファイルシステム性能に関する重要な注意
 
-> **IMPORTANT**: Always work within the WSL2 file system (`~/`, `/home/`). **Do NOT** use Windows-mounted paths (`/mnt/c/`, `/mnt/d/`).
+> **重要**: 作業は必ず WSL2 のファイルシステム内（`~/`, `/home/`）で行ってください。Windows のマウントパス（`/mnt/c/`, `/mnt/d/`）は**絶対に使わないでください**。
 
-| Path | Performance | Use for IGNITE? |
-|------|-------------|-----------------|
-| `~/IGNITE/` (WSL2 ext4) | Fast (native Linux speed) | **Yes** |
-| `/mnt/c/Users/.../IGNITE/` (Windows NTFS) | Very slow (9x overhead) | **No** |
+| パス | 性能 | IGNITE での使用 |
+|------|------|----------------|
+| `~/IGNITE/`（WSL2 ext4） | 高速（Linuxネイティブ速度） | **推奨** |
+| `/mnt/c/Users/.../IGNITE/`（Windows NTFS） | 非常に遅い（約9倍のオーバーヘッド） | **使用禁止** |
 
-Working on `/mnt/c/` causes:
-- **Slow git operations** (clone, status, diff)
-- **SQLite locking issues** (memory.db corruption risk)
-- **File watcher failures** (inotify not supported on NTFS mounts)
+`/mnt/c/` 上で作業すると以下の問題が発生します：
+- **git操作が極端に遅い**（clone, status, diff）
+- **SQLiteのロック問題**（memory.db の破損リスク）
+- **ファイル監視の失敗**（NTFSマウントでは inotify が非対応）
 
-If you need to access files from Windows, use the `\\wsl$\Ubuntu\home\<user>\` network path instead.
+Windows からファイルにアクセスしたい場合は、エクスプローラーで `\\wsl$\Ubuntu\home\<ユーザー名>\` のネットワークパスを使用してください。
 
-## 7. VS Code Remote WSL Integration
+## 7. VS Code Remote WSL 連携
 
-VS Code provides seamless integration with WSL2:
+VS Code は WSL2 とシームレスに連携できます：
 
-1. Install [VS Code](https://code.visualstudio.com/) on Windows
-2. Install the [WSL extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-wsl)
-3. Open IGNITE from WSL2:
+1. Windows に [VS Code](https://code.visualstudio.com/) をインストール
+2. [WSL 拡張機能](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-wsl) をインストール
+3. WSL2 から IGNITE を開く：
 
 ```bash
-# In WSL2 terminal
+# WSL2 ターミナルで
 cd ~/IGNITE
 code .
 ```
 
-This opens VS Code on Windows, connected to the WSL2 file system. You get:
-- Full IntelliSense for files inside WSL2
-- Integrated terminal running in WSL2
-- Git operations using WSL2's git
-- Extensions run inside WSL2 for best performance
+これにより Windows 上の VS Code が WSL2 のファイルシステムに接続されます：
+- WSL2 内のファイルに対する IntelliSense が利用可能
+- 統合ターミナルが WSL2 内で動作
+- Git 操作は WSL2 の git を使用
+- 拡張機能が WSL2 内で実行され最適なパフォーマンスを発揮
 
-## 8. Windows Terminal Configuration
+## 8. Windows Terminal の設定
 
-[Windows Terminal](https://aka.ms/terminal) provides the best experience for IGNITE's tmux sessions.
+[Windows Terminal](https://aka.ms/terminal) は IGNITE の tmux セッションに最適な環境を提供します。
 
-**Recommended settings** (Settings > Ubuntu profile):
+**推奨設定**（設定 > Ubuntu プロファイル）：
 
-| Setting | Recommended Value | Reason |
-|---------|-------------------|--------|
-| Font | Cascadia Code NF / Hack Nerd Font | Supports special characters in tmux status bar |
-| Font size | 10-12 | Fits more panes on screen |
-| Color scheme | One Half Dark / Tango Dark | Good contrast for tmux panes |
-| Scrollback | 10000+ | Preserve agent output history |
+| 設定 | 推奨値 | 理由 |
+|------|--------|------|
+| フォント | Cascadia Code NF / Hack Nerd Font | tmux ステータスバーの特殊文字に対応 |
+| フォントサイズ | 10-12 | 画面に多くのペインを表示可能 |
+| 配色 | One Half Dark / Tango Dark | tmux ペインのコントラストが良好 |
+| スクロールバック | 10000以上 | エージェントの出力履歴を保持 |
 
-**Useful shortcuts**:
+**便利なショートカット**：
 
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+Shift+T` | New tab |
-| `Alt+Shift+D` | Split pane |
-| `Ctrl+Shift+W` | Close pane |
-| `Ctrl+Shift+F` | Find in terminal |
+| ショートカット | 動作 |
+|--------------|------|
+| `Ctrl+Shift+T` | 新しいタブ |
+| `Alt+Shift+D` | ペイン分割 |
+| `Ctrl+Shift+W` | ペインを閉じる |
+| `Ctrl+Shift+F` | ターミナル内検索 |
 
-> **Tip**: Pin your WSL2 Ubuntu profile as the default in Windows Terminal for quick access to IGNITE.
+> **Tip**: Windows Terminal で WSL2 Ubuntu プロファイルをデフォルトに設定すると、すぐに IGNITE にアクセスできて便利です。
 
-## 9. Troubleshooting
+## 9. トラブルシューティング
 
-### WSL2 fails to install
+### WSL2 のインストールに失敗する
 
-**Symptom**: `wsl --install` fails or WSL2 is not available.
+**症状**: `wsl --install` が失敗する、または WSL2 が利用できない。
 
-**Solution**:
+**対処法**:
 ```powershell
-# Enable required Windows features manually
+# Windows の機能を手動で有効化
 dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
 dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
-# Restart, then:
+# 再起動後:
 wsl --set-default-version 2
 ```
 
-### "Cannot access WSL2 from Windows"
+### Windows から WSL2 にアクセスできない
 
-**Symptom**: Cannot reach WSL2 services from Windows browser.
+**症状**: Windows のブラウザから WSL2 のサービスに接続できない。
 
-**Solution**: Ensure `localhostForwarding=true` is set in `.wslconfig`, then restart WSL:
+**対処法**: `.wslconfig` に `localhostForwarding=true` が設定されていることを確認し、WSL を再起動します：
 ```powershell
 wsl --shutdown
 ```
 
-### tmux display issues
+### tmux の表示が崩れる
 
-**Symptom**: Characters display incorrectly in tmux.
+**症状**: tmux 内で文字が正しく表示されない。
 
-**Solution**:
-1. Install a Nerd Font (e.g., [Hack Nerd Font](https://www.nerdfonts.com/))
-2. Set it as the font in Windows Terminal
-3. Add to `~/.tmux.conf` if needed:
+**対処法**:
+1. Nerd Font をインストール（例：[Hack Nerd Font](https://www.nerdfonts.com/)）
+2. Windows Terminal のフォント設定で指定
+3. 必要に応じて `~/.tmux.conf` に以下を追加：
    ```bash
    set -g default-terminal "tmux-256color"
    ```
 
-### Slow file operations
+### ファイル操作が遅い
 
-**Symptom**: Git operations or IGNITE startup is unusually slow.
+**症状**: Git 操作や IGNITE の起動が異常に遅い。
 
-**Solution**: Confirm you are working in the WSL2 file system:
+**対処法**: WSL2 のファイルシステム内で作業しているか確認します：
 ```bash
-# Check your current path
+# 現在のパスを確認
 pwd
-# Should show /home/<user>/... NOT /mnt/c/...
+# /home/<ユーザー名>/... と表示されるべき。/mnt/c/... ではないこと
 ```
 
-If files are on `/mnt/c/`, move them:
+ファイルが `/mnt/c/` にある場合は移動してください：
 ```bash
-cp -r /mnt/c/Users/YourName/IGNITE ~/IGNITE
+cp -r /mnt/c/Users/ユーザー名/IGNITE ~/IGNITE
 cd ~/IGNITE
 ```
 
-### Claude Code connection issues
+### Claude Code の接続に問題がある
 
-**Symptom**: Claude Code CLI cannot connect to API.
+**症状**: Claude Code CLI が API に接続できない。
 
-**Solution**: Check DNS resolution inside WSL2:
+**対処法**: WSL2 内の DNS 解決を確認します：
 ```bash
-# Test connectivity
+# 接続テスト
 curl -s https://api.anthropic.com > /dev/null && echo "OK" || echo "FAIL"
 
-# If DNS fails, add Google DNS
+# DNS に問題がある場合、Google DNS を追加
 echo "nameserver 8.8.8.8" | sudo tee /etc/resolv.conf
 ```
 
 ---
 
-*See also: [README.md](../README.md) | [Architecture](architecture.md) | [Protocol](protocol.md)*
+*参照: [README.md](../README.md) | [アーキテクチャ](architecture.md) | [プロトコル](protocol.md)*

@@ -100,8 +100,8 @@ teardown() {
     [[ "$output" == *"Phase 6: tmuxセッション作成"* ]]
     [[ "$output" == *"Phase 7: Claude CLI起動"* ]]
 
-    # tmuxセッションが作成されていないこと
-    ! tmux has-session -t "ignite-*" 2>/dev/null || true
+    # dry-runではtmuxセッション名が出力に含まれないこと確認
+    [[ "$output" != *"tmuxセッションを作成中"* ]]
 }
 
 @test "dry-run: Phase 1-5 が実行済みであること（出力メッセージ確認）" {

@@ -240,8 +240,6 @@ EOF
 
     # --dry-run モード: Phase 1-5 完了後、tmux/CLI/Watcher/Monitor起動をスキップして終了
     if [[ "$dry_run" == true ]]; then
-        local actual_ignitian_count=0
-
         # Phase 8: システム設定ファイル生成（dry-runでも実行）
         print_info "システム設定を保存中..."
         cat > "$WORKSPACE_DIR/system_config.yaml" <<EOF

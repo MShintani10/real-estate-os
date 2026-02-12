@@ -37,6 +37,9 @@ log_success() { echo -e "${GREEN}[OK]${NC} $1" >&2; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1" >&2; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 
+# Bot Token / GitHub API 共通関数の読み込み
+source "${SCRIPT_DIR}/github_helpers.sh"
+
 # =============================================================================
 # ヘルプ
 # =============================================================================
@@ -213,32 +216,12 @@ create_pull_request() {
         draft_flag="--draft"
     fi
 
-    # トークン設定
+    # トークン設定（キャッシュ付きBot Token取得、期限切れなら自動更新）
     local bot_token=""
     if [[ "$use_bot" == "true" ]]; then
-        local _token_err _token_rc=0
-        _token_err=$(mktemp)
-        # IGNITE_CONFIG_DIR が設定されていれば、github-app.yaml のパスを渡す
-        # --repo オプションでリポジトリを指定（Organization対応）
-        if [[ -n "${IGNITE_CONFIG_DIR:-}" ]]; then
-            bot_token=$(IGNITE_GITHUB_CONFIG="${IGNITE_CONFIG_DIR}/github-app.yaml" "${SCRIPT_DIR}/get_github_app_token.sh" --repo "$repo" 2>>"$_token_err") || _token_rc=$?
-        else
-            bot_token=$("${SCRIPT_DIR}/get_github_app_token.sh" --repo "$repo" 2>>"$_token_err") || _token_rc=$?
-        fi
-        if [[ $_token_rc -ne 0 ]]; then
-            log_warn "Bot Token取得失敗 (exit_code=$_token_rc)"
-            [[ -s "$_token_err" ]] && log_warn "$(cat "$_token_err")"
-            bot_token=""
-        fi
-        rm -f "$_token_err"
+        bot_token=$(get_cached_bot_token "$repo") || true
         if [[ -z "$bot_token" ]]; then
-            # フォールバック: ペイン起動時の GH_TOKEN を確認
-            if [[ -n "${GH_TOKEN:-}" && "${GH_TOKEN}" == ghs_* ]]; then
-                log_warn "直接のBot Token取得失敗。環境変数GH_TOKENを使用します。"
-                bot_token="${GH_TOKEN}"
-            else
-                log_warn "Bot Token取得失敗。通常のトークンで作成します。"
-            fi
+            log_warn "Bot Token取得失敗。通常のトークンで作成します。"
         fi
     fi
 

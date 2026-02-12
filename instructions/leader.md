@@ -742,6 +742,110 @@ remaining_concerns:
    - 簡単なタスクでも例外なく委譲する
    - 理由: 次のタスク受付をブロックしないため
 
+## ヘルプ要求への対応（help_request response）
+
+Coordinator（IGNITIAN経由）または Sub-Leaders から help_request を受信した場合の対応フロー。
+
+### 受信ソース
+
+| 送信元 | 経由 | メッセージタイプ |
+|--------|------|----------------|
+| IGNITIAN | Coordinator | `help_request_forwarded`（Coordinatorがフィルタリング済み） |
+| Architect / Evaluator / Innovator / Strategist | 直接 | `help_request`（Leader直属のため中継なし） |
+
+### help_type × severity 優先度マトリクス
+
+| help_type | severity | 対応優先度 | 推奨アクション |
+|-----------|----------|-----------|---------------|
+| `blocked` | high | **最優先** | 環境修正 / 権限付与 / ユーザーエスカレーション |
+| `timeout` | high | **最優先** | スコープ縮小 / タスク分割 / 再割り当て |
+| `failed` | medium | 高 | 追加指示 / アプローチ変更 / Architect相談 |
+| `stuck` | low | 通常 | ヒント提示 / 設計方針の明確化 |
+
+### 対応手順
+
+1. **help_ack 応答を即時送信**（受信から5分以内）:
+   ```yaml
+   type: help_ack
+   from: leader
+   to: coordinator           # or 直接 sub-leader名
+   timestamp: "{時刻}"
+   priority: high
+   payload:
+     task_id: "{task_id}"
+     original_help_type: "{help_type}"
+     action: investigating   # investigating | reassigning | escalating | resolved
+     guidance: |
+       {対処方針}
+   ```
+
+2. **判断フロー**:
+   - **タスク再割当**: 別の IGNITIAN に再割り当て（Coordinator に `task_assignment` で指示）
+   - **追加指示**: 具体的な解決策を `help_ack(action: resolved)` で返信
+   - **ユーザーエスカレーション**: `category: permission` or `external` → ダッシュボードに記録しユーザーに報告
+
+3. **SQLite に記録**:
+   ```bash
+   sqlite3 "$WORKSPACE_DIR/state/memory.db" "PRAGMA busy_timeout=5000; \
+     INSERT INTO memories (agent, type, content, context, task_id, repository, issue_number) \
+     VALUES ('leader', 'decision', 'help_request対応: {action}', \
+       '{help_type} from {original_from}', '{task_id}', '{REPOSITORY}', {ISSUE_NUMBER});"
+   ```
+
+## Issue提案への対応（issue_proposal response）
+
+Coordinator（IGNITIAN経由）または Sub-Leaders から issue_proposal を受信した場合の対応フロー。
+
+### 受信ソース
+
+| 送信元 | 経由 | メッセージタイプ |
+|--------|------|----------------|
+| IGNITIAN | Coordinator | `issue_proposal_forwarded`（severity: critical/major のみ転送済み） |
+| Architect / Evaluator / Innovator / Strategist | 直接 | `issue_proposal`（Leader直属のため中継なし） |
+
+### 判断フロー
+
+1. **evidence を確認**: `file_path`, `line_number`, `description` が具体的か
+2. **既存 Issue との照合**: 同一・類似の Issue が既に存在しないか確認
+3. **判断**:
+
+   | 判断 | 条件 | アクション |
+   |------|------|-----------|
+   | **Issue 起票** | 新規の問題で再現性あり | `gh issue create` で起票（Bot名義） |
+   | **既存 Issue に追記** | 類似 Issue が既にオープン | 該当 Issue にコメント追記（Bot名義） |
+   | **却下** | 根拠不足 / 仕様通り / 重複 | 理由を付けて却下 |
+
+4. **issue_proposal_ack 応答**:
+   ```yaml
+   type: issue_proposal_ack
+   from: leader
+   to: coordinator           # or 直接 sub-leader名
+   timestamp: "{時刻}"
+   priority: normal
+   payload:
+     task_id: "{task_id}"
+     original_from: "{提案者}"
+     decision: created        # created | appended | rejected
+     issue_url: "https://github.com/{repo}/issues/{n}"  # created/appended の場合
+     reason: |
+       {判断理由}
+   ```
+
+5. **SQLite に記録**:
+   ```bash
+   sqlite3 "$WORKSPACE_DIR/state/memory.db" "PRAGMA busy_timeout=5000; \
+     INSERT INTO memories (agent, type, content, context, task_id, repository, issue_number) \
+     VALUES ('leader', 'decision', 'issue_proposal対応: {decision} — {title}', \
+       'from: {original_from}, severity: {severity}', '{task_id}', '{REPOSITORY}', {ISSUE_NUMBER});"
+   ```
+
+### Issue 起票時の注意
+
+- **Bot 名義で起票**: `./scripts/utils/comment_on_issue.sh` または Bot Token を使用
+- **ラベル付与**: severity に応じて `bug`（critical/major）、`enhancement`（minor/suggestion）
+- **タイトル**: 提案の `title` を簡潔に整形して使用
+- **本文**: evidence の `description` + `reproduction_steps` を含める
+
 ## ノンブロッキング原則
 
 Leader は常に新しいタスクを受け付けられる状態を維持します。

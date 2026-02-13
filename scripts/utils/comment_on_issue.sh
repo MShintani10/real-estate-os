@@ -187,9 +187,10 @@ _is_duplicate_comment() {
     fi
 
     # jqで各コメントbodyをtrimして比較
+    # --slurp: gh api --paginateが複数ページ返す場合の連結JSON配列を単一配列に統合
     local match
-    match=$(printf '%s' "$comments_json" | jq --arg new_body "$trimmed_body" '
-        [.[] | .body | gsub("^\\s+|\\s+$"; "")] | any(. == $new_body)
+    match=$(printf '%s' "$comments_json" | jq --slurp --arg new_body "$trimmed_body" '
+        [.[][] | .body | gsub("^\\s+|\\s+$"; "")] | any(. == $new_body)
     ' 2>/dev/null) || true
 
     if [[ "$match" == "true" ]]; then

@@ -90,10 +90,8 @@ GHEOF
     run post_comment "test/repo" "123" "テストコメント本文" "false"
 
     [[ "$status" -eq 0 ]]
-    [[ "$output" == *"SKIP"* ]] || [[ "$stderr" == *"SKIP"* ]] || grep -q "SKIP" <<< "$(cat "$TEST_TEMP_DIR/mock_bin/gh" 2>/dev/null; echo "$output")" || {
-        # post_called が存在しないことで投稿されていないことを確認
-        [[ ! -f "$TEST_TEMP_DIR/post_called" ]]
-    }
+    # 重複検出時は投稿されないこと
+    [[ ! -f "$TEST_TEMP_DIR/post_called" ]]
 }
 
 @test "idempotency: 重複なしの場合通常投稿される" {

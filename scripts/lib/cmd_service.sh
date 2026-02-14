@@ -90,18 +90,30 @@ _service_install() {
     fi
 
     # 既存インストールの確認
-    if [[ -f "$unit_dir/ignite@.service" ]] && [[ "$force" != true ]]; then
-        print_warning "ignite@.service は既にインストールされています"
-        if [[ -t 0 ]]; then
-            read -p "ユニットファイルを更新しますか? (y/N): " -n 1 -r
-            echo
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                print_warning "キャンセルしました"
-                return 0
+    if [[ -f "$unit_dir/ignite@.service" ]]; then
+        if diff -q "$source_dir/ignite@.service" "$unit_dir/ignite@.service" &>/dev/null; then
+            print_success "ignite@.service は最新版です"
+            return 0
+        fi
+
+        # 差分を表示
+        print_warning "ignite@.service に変更があります:"
+        echo ""
+        diff -u "$unit_dir/ignite@.service" "$source_dir/ignite@.service" || true
+        echo ""
+
+        if [[ "$force" != true ]]; then
+            if [[ -t 0 ]]; then
+                read -p "ユニットファイルを更新しますか? (y/N): " -n 1 -r
+                echo
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    print_warning "キャンセルしました"
+                    return 0
+                fi
+            else
+                print_error "非対話環境では --force オプションを使用してください"
+                exit 1
             fi
-        else
-            print_error "非対話環境では --force オプションを使用してください"
-            exit 1
         fi
     fi
 

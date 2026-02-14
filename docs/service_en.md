@@ -117,7 +117,16 @@ ignite service install
 ignite service install --force
 ```
 
-**Output example:**
+**Upgrade behavior:**
+
+| State | Behavior |
+|-------|----------|
+| First install | Copies files directly |
+| Identical to existing | Shows `up to date` and skips |
+| Differences found | Shows `diff -u` output and prompts for confirmation |
+| `--force` + differences | Shows `diff -u` and overwrites without confirmation |
+
+**Output example (first install):**
 
 ```
 Installing unit files...
@@ -132,6 +141,22 @@ Next steps:
   1. Set up environment: ignite service setup-env
   2. Enable service: ignite service enable <session>
   3. Enable linger: loginctl enable-linger <user>
+```
+
+**Output example (upgrade):**
+
+```
+⚠ ignite@.service has changes:
+
+--- /home/user/.config/systemd/user/ignite@.service
++++ /home/user/.local/share/ignite/templates/systemd/ignite@.service
+@@ -1,3 +1,3 @@
+ [Unit]
+-Description=IGNITE old %i
++Description=IGNITE %i
+ ...
+
+Update unit file? (y/N):
 ```
 
 **Unit file search paths (priority order):**
@@ -562,5 +587,5 @@ ignite stop -s <session-name>
 ### Phased Migration
 
 1. **Phase 1**: Use `ignite start --daemon` for daemon mode
-2. **Phase 2 (Current)**: Install unit files with `ignite service install`
-3. **Phase 3**: Set up auto-start with `ignite service enable`, remove cron `@reboot`
+2. **Phase 2**: Install unit files with `ignite service install`
+3. **Phase 3 (Current)**: Set up auto-start with `ignite service enable`, remove cron `@reboot`

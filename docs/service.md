@@ -117,7 +117,16 @@ ignite service install
 ignite service install --force
 ```
 
-**出力例:**
+**アップグレード動作:**
+
+| 状態 | 動作 |
+|------|------|
+| 初回インストール | そのままコピー |
+| 既存ファイルと同一 | `最新版です` を表示してスキップ |
+| 差分あり | `diff -u` で変更内容を表示し、確認プロンプト |
+| `--force` + 差分あり | `diff -u` を表示して確認なしで上書き |
+
+**出力例（初回）:**
 
 ```
 ユニットファイルをインストール中...
@@ -132,6 +141,22 @@ systemd daemon-reload を実行中...
   1. 環境変数を設定: ignite service setup-env
   2. サービスを有効化: ignite service enable <session>
   3. linger 有効化: loginctl enable-linger <user>
+```
+
+**出力例（アップグレード時）:**
+
+```
+⚠ ignite@.service に変更があります:
+
+--- /home/user/.config/systemd/user/ignite@.service
++++ /home/user/.local/share/ignite/templates/systemd/ignite@.service
+@@ -1,3 +1,3 @@
+ [Unit]
+-Description=IGNITE old %i
++Description=IGNITE %i
+ ...
+
+ユニットファイルを更新しますか? (y/N):
 ```
 
 **ユニットファイル検索パス（優先順）:**
@@ -562,5 +587,5 @@ ignite stop -s <session-name>
 ### 段階的移行
 
 1. **Phase 1**: `ignite start --daemon` でdaemonモード使用
-2. **Phase 2（現在）**: `ignite service install` でユニットファイル導入
-3. **Phase 3**: `ignite service enable` で自動起動設定、cron `@reboot` 削除
+2. **Phase 2**: `ignite service install` でユニットファイル導入
+3. **Phase 3（現在）**: `ignite service enable` で自動起動設定、cron `@reboot` 削除

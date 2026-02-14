@@ -95,8 +95,24 @@ check_dependencies() {
 
     local missing=()
 
-    # 必須コマンド
-    for cmd in tmux claude gh; do
+    # system.yaml から CLI プロバイダーを簡易パース
+    local cli_provider="claude"
+    local system_yaml="$CONFIG_DIR/system.yaml"
+    if [[ -f "$system_yaml" ]]; then
+        local _prov
+        _prov=$(sed -n '/^cli:/,/^[^ ]/p' "$system_yaml" 2>/dev/null \
+            | awk -F': ' '/^  provider:/{print $2; exit}' | sed 's/ *#.*//' | tr -d '"' | tr -d "'")
+        [[ -n "$_prov" ]] && cli_provider="$_prov"
+    fi
+
+    # プロバイダーに応じた必須コマンドリスト
+    local required_cmds="tmux gh"
+    case "$cli_provider" in
+        opencode) required_cmds="tmux opencode gh" ;;
+        *)        required_cmds="tmux claude gh" ;;
+    esac
+
+    for cmd in $required_cmds; do
         if command -v "$cmd" &> /dev/null; then
             print_success "$cmd が見つかりました"
         else
@@ -115,6 +131,9 @@ check_dependencies() {
                     ;;
                 claude)
                     echo "  - claude: npm install -g @anthropic-ai/claude-code"
+                    ;;
+                opencode)
+                    echo "  - opencode: https://opencode.ai/"
                     ;;
                 gh)
                     echo "  - gh: https://cli.github.com/"

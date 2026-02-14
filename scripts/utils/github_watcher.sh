@@ -113,7 +113,9 @@ load_config() {
         STATE_FILE="${STATE_FILE#workspace/}"
         STATE_FILE="${IGNITE_WORKSPACE_DIR}/${STATE_FILE}"
     else
-        STATE_FILE="${PROJECT_ROOT}/${STATE_FILE}"
+        # "workspace/state/..." → IGNITE_RUNTIME_DIR/state/...
+        STATE_FILE="${STATE_FILE#workspace/}"
+        STATE_FILE="${IGNITE_RUNTIME_DIR:-$PROJECT_ROOT/workspace}/${STATE_FILE}"
     fi
 
     IGNORE_BOT=$(yaml_get "$config_file" 'ignore_bot')
@@ -187,7 +189,9 @@ load_config() {
     else
         WORKSPACE_DIR=$(yaml_get "$config_file" 'workspace')
         WORKSPACE_DIR=${WORKSPACE_DIR:-"workspace"}
-        WORKSPACE_DIR="${PROJECT_ROOT}/${WORKSPACE_DIR}"
+        if [[ "$WORKSPACE_DIR" != /* ]]; then
+            WORKSPACE_DIR="${PROJECT_ROOT}/${WORKSPACE_DIR}"
+        fi
     fi
 
     # アクセス制御設定
@@ -613,7 +617,7 @@ create_event_message() {
     timestamp=$(date -Iseconds)
     local message_id
     message_id=$(date +%s%6N)
-    local queue_dir="${WORKSPACE_DIR}/queue/leader"
+    local queue_dir="${IGNITE_RUNTIME_DIR}/queue/leader"
     # IGNITE_MIME はファイルスコープで定義済み
 
     mkdir -p "$queue_dir"
@@ -745,7 +749,7 @@ create_task_message() {
     local timestamp message_id
     timestamp=$(date -Iseconds)
     message_id=$(date +%s%6N)
-    local queue_dir="${WORKSPACE_DIR}/queue/leader"
+    local queue_dir="${IGNITE_RUNTIME_DIR}/queue/leader"
 
     mkdir -p "$queue_dir"
 

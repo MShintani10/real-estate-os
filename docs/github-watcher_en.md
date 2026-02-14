@@ -23,7 +23,7 @@ flowchart TB
         Leader[Leader<br/>Yui Iha]
         SubLeaders[Sub-Leaders / IGNITIANs]
 
-        GW -->|"github_event_*.mime<br/>workspace/queue/leader/"| Leader
+        GW -->|"github_event_*.mime<br/>workspace/.ignite/queue/leader/"| Leader
         Leader -->|Existing flow| SubLeaders
     end
 
@@ -349,7 +349,7 @@ ignite work-on https://github.com/owner/repo/issues/123
 
 ### Processed Events
 
-Processed events are recorded in `workspace/state/github_watcher_state.json`:
+Processed events are recorded in `workspace/.ignite/state/github_watcher_state.json`:
 
 ```json
 {
@@ -404,7 +404,7 @@ Processed events older than 24 hours are automatically cleaned up.
 
 Reset state file:
 ```bash
-rm workspace/state/github_watcher_state.json
+rm workspace/.ignite/state/github_watcher_state.json
 ```
 
 ### API Rate Limiting
@@ -422,10 +422,10 @@ gh api /rate_limit
 
 ```bash
 # Check Watcher logs
-tail -f workspace/logs/github_watcher.log
+tail -f workspace/.ignite/logs/github_watcher.log
 
 # Check generated messages
-ls -la workspace/queue/leader/github_*.mime
+ls -la workspace/.ignite/queue/leader/github_*.mime
 ```
 
 ## Security Notes
@@ -487,7 +487,7 @@ Utility script for cloning and working with external repositories.
 
 # Get path
 REPO_PATH=$(./scripts/utils/setup_repo.sh path owner/repo)
-echo $REPO_PATH  # workspace/repos/owner_repo
+echo $REPO_PATH  # workspace/.ignite/repos/owner_repo
 
 # Create Issue branch
 ./scripts/utils/setup_repo.sh branch "$REPO_PATH" 123

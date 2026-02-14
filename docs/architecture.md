@@ -189,13 +189,14 @@ ignite/
 │   └── github-watcher.yaml  # GitHub Watcher設定
 │
 ├── workspace/           # 実行時ワークスペース（.gitignore）
-│   ├── queue/           # メッセージキュー（タスク完了レポート含む）
-│   ├── context/         # コンテキスト
-│   ├── state/           # 状態管理ファイル
-│   │   └── report_issues.json  # 日次レポートIssue番号キャッシュ
-│   ├── memory.db        # SQLiteエージェントメモリDB
-│   ├── logs/            # ログファイル
-│   └── dashboard.md     # 進捗ダッシュボード
+│   └── .ignite/         # ランタイムデータ
+│       ├── queue/       # メッセージキュー（タスク完了レポート含む）
+│       ├── context/     # コンテキスト
+│       ├── state/       # 状態管理ファイル
+│       │   └── report_issues.json  # 日次レポートIssue番号キャッシュ
+│       ├── memory.db    # SQLiteエージェントメモリDB
+│       ├── logs/        # ログファイル
+│       └── dashboard.md # 進捗ダッシュボード
 │
 └── docs/                # ドキュメント
     ├── architecture.md  # このファイル
@@ -354,7 +355,7 @@ graph LR
 
 **キューディレクトリ:**
 ```
-workspace/queue/
+workspace/.ignite/queue/
 ├── leader/              # Leaderエージェント用
 │   ├── *.mime           # 未処理メッセージ
 │   └── processed/       # 処理中・完了メッセージ
@@ -467,7 +468,7 @@ sequenceDiagram
 
 ### 状態管理
 
-`workspace/state/report_issues.json` にリポジトリ×日付→Issue番号のキャッシュを保持し、重複作成を防止します（アトミック書き込み対応）。
+`workspace/.ignite/state/report_issues.json` にリポジトリ×日付→Issue番号のキャッシュを保持し、重複作成を防止します（アトミック書き込み対応）。
 
 ## パフォーマンス最適化
 
@@ -496,10 +497,10 @@ sequenceDiagram
 ## 監視とデバッグ
 
 ### ダッシュボード
-`workspace/dashboard.md` で全体進捗を可視化
+`workspace/.ignite/dashboard.md` で全体進捗を可視化
 
 ### ログファイル
-各エージェントのログ: `workspace/logs/{role}.log`
+各エージェントのログ: `workspace/.ignite/logs/{role}.log`
 
 ### ステータス確認
 ```bash

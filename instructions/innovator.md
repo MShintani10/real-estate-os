@@ -27,13 +27,13 @@
 ## 通信プロトコル
 
 ### 受信先
-- `workspace/queue/innovator/` - あなた宛てのメッセージ
+- `.ignite/queue/innovator/` - あなた宛てのメッセージ
 
 ### 送信先
-- `workspace/queue/leader/` - Leaderへの改善提案
-- `workspace/queue/architect/` - Architectへの設計改善提案
-- `workspace/queue/coordinator/` - Coordinatorへのプロセス改善提案
-- `workspace/queue/strategist/` - Strategistへのインサイト回答
+- `.ignite/queue/leader/` - Leaderへの改善提案
+- `.ignite/queue/architect/` - Architectへの設計改善提案
+- `.ignite/queue/coordinator/` - Coordinatorへのプロセス改善提案
+- `.ignite/queue/strategist/` - Strategistへのインサイト回答
 
 ### メッセージフォーマット
 
@@ -112,7 +112,7 @@ payload:
   trigger_source:
     repository: "owner/repo"
     issue_number: 42
-  repo_path: "/path/to/workspace/repos/owner_repo"
+  repo_path: "/path/to/.ignite/repos/owner_repo"
   analysis_scope:
     since: ""
     types: [learning, error, observation]
@@ -326,7 +326,7 @@ queue_monitorから通知が来たら、以下を実行してください:
 
 ## 禁止事項
 
-- **自発的なキューポーリング**: `workspace/queue/innovator/` を定期的にチェックしない
+- **自発的なキューポーリング**: `.ignite/queue/innovator/` を定期的にチェックしない
 - **待機ループの実行**: 「通知を待つ」ためのループを実行しない
 - **Globによる定期チェック**: 定期的にGlobでキューを検索しない
 
@@ -554,7 +554,7 @@ payload:
 使用するツール:
 ```bash
 # ログファイルの分析
-grep "IGNITIAN" workspace/logs/*.log | grep "待機"
+grep "IGNITIAN" .ignite/logs/*.log | grep "待機"
 
 # タスク配分スクリプトの確認
 cat scripts/utils/distribute_tasks.sh
@@ -783,12 +783,12 @@ payload:
 **1. ダッシュボードに追記:**
 ```bash
 TIME=$(date -Iseconds)
-sed -i '/^## 最新ログ$/a\['"$TIME"'] [恵那ツムギ] メッセージ' workspace/dashboard.md
+sed -i '/^## 最新ログ$/a\['"$TIME"'] [恵那ツムギ] メッセージ' .ignite/dashboard.md
 ```
 
 **2. ログファイルに追記:**
 ```bash
-echo "[$(date -Iseconds)] メッセージ" >> workspace/logs/innovator.log
+echo "[$(date -Iseconds)] メッセージ" >> .ignite/logs/innovator.log
 ```
 
 ### ログ出力例
@@ -822,7 +822,7 @@ echo "[$(date -Iseconds)] メッセージ" >> workspace/logs/innovator.log
 ## メモリ操作（SQLite 永続化）
 
 IGNITE システムはセッション横断のメモリを SQLite データベースで管理します。
-データベースパス: `workspace/state/memory.db`
+データベースパス: `.ignite/state/memory.db`
 
 > **注**: `sqlite3` コマンドが利用できない環境では、メモリ操作はスキップしてください。コア機能（改善提案・最適化）には影響しません。
 

@@ -326,7 +326,7 @@ ignite status
 watch -n 5 ignite status
 
 # Or display dashboard file directly
-cat workspace/dashboard.md
+cat workspace/.ignite/dashboard.md
 ```
 
 #### View Logs
@@ -525,22 +525,23 @@ ignite/
 │   └── github-watcher.yaml     # GitHub Watcher settings
 │
 ├── workspace/                  # Runtime workspace (excluded via .gitignore)
-│   ├── queue/                  # Message queues (per agent)
-│   │   ├── leader/
-│   │   ├── strategist/
-│   │   ├── architect/
-│   │   ├── evaluator/
-│   │   ├── coordinator/
-│   │   ├── innovator/
-│   │   ├── ignitian_1/          # IGNITIAN-1 queue
-│   │   ├── ignitian_2/          # IGNITIAN-2 queue
-│   │   └── ignitian_{n}/        # IGNITIAN-N queue (dynamic)
-│   ├── context/                # Project context
-│   ├── state/                  # State management files
-│   │   └── report_issues.json  # Daily report Issue number cache
-│   ├── memory.db               # SQLite agent memory DB
-│   ├── logs/                   # Log files
-│   └── dashboard.md            # Real-time progress dashboard
+│   └── .ignite/                # Runtime data
+│       ├── queue/              # Message queues (per agent)
+│       │   ├── leader/
+│       │   ├── strategist/
+│       │   ├── architect/
+│       │   ├── evaluator/
+│       │   ├── coordinator/
+│       │   ├── innovator/
+│       │   ├── ignitian_1/      # IGNITIAN-1 queue
+│       │   ├── ignitian_2/      # IGNITIAN-2 queue
+│       │   └── ignitian_{n}/    # IGNITIAN-N queue (dynamic)
+│       ├── context/            # Project context
+│       ├── state/              # State management files
+│       │   └── report_issues.json  # Daily report Issue number cache
+│       ├── memory.db           # SQLite agent memory DB
+│       ├── logs/               # Log files
+│       └── dashboard.md        # Real-time progress dashboard
 │
 ├── docs/                       # Documentation
 │   ├── architecture.md         # Architecture details
@@ -640,7 +641,7 @@ A lightweight mode where only the Leader processes tasks without launching Sub-L
 **Notes:**
 - Normal mode (coordination mode) is recommended for complex tasks or large-scale changes
 - In solo mode, the `[SOLO]` tag is added to Leader's logs
-- Configuration is managed in `workspace/system_config.yaml` under `system.agent_mode`
+- Configuration is managed in `workspace/.ignite/runtime.yaml` under `system.agent_mode`
 
 ### Usage Examples by Task Type
 
@@ -793,7 +794,7 @@ ignite --version
 
 ### Understanding the Dashboard
 
-Example of `workspace/dashboard.md`:
+Example of `workspace/.ignite/dashboard.md`:
 
 ```markdown
 # IGNITE Dashboard
@@ -912,10 +913,10 @@ Ctrl+b q 6  # Go to IGNITIAN-1's pane
 
 ```bash
 # Verify dashboard file exists
-ls -la workspace/dashboard.md
+ls -la workspace/.ignite/dashboard.md
 
 # Manually recreate
-cat > workspace/dashboard.md <<EOF
+cat > workspace/.ignite/dashboard.md <<EOF
 # IGNITE Dashboard
 
 Updated: $(date '+%Y-%m-%d %H:%M:%S')

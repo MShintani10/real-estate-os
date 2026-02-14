@@ -1,3 +1,21 @@
+# CLI プロバイダー設定
+# provider: claude（デフォルト）または opencode
+# model: 使用するモデル名（プロバイダーにより形式が異なる）
+#
+# Claude Code の場合:
+#   cli:
+#     provider: claude
+#     model: claude-opus-4-6
+#
+# OpenCode の場合:
+#   cli:
+#     provider: opencode
+#     model: anthropic/claude-sonnet-4-5-20250929
+#
+# cli:
+#   provider: claude
+#   model: claude-opus-4-6
+
 tmux:
   window_name: ignite
 

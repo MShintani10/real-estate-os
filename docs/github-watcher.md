@@ -23,7 +23,7 @@ flowchart TB
         Leader[Leader<br/>伊羽ユイ]
         SubLeaders[Sub-Leaders / IGNITIANs]
 
-        GW -->|"github_event_*.mime<br/>workspace/queue/leader/"| Leader
+        GW -->|"github_event_*.mime<br/>workspace/.ignite/queue/leader/"| Leader
         Leader -->|既存フロー| SubLeaders
     end
 
@@ -349,7 +349,7 @@ ignite work-on https://github.com/owner/repo/issues/123
 
 ### 処理済みイベント
 
-処理済みイベントは `workspace/state/github_watcher_state.json` に記録されます:
+処理済みイベントは `workspace/.ignite/state/github_watcher_state.json` に記録されます:
 
 ```json
 {
@@ -404,7 +404,7 @@ ignite work-on https://github.com/owner/repo/issues/123
 
 ステートファイルをリセット:
 ```bash
-rm workspace/state/github_watcher_state.json
+rm workspace/.ignite/state/github_watcher_state.json
 ```
 
 ### APIレート制限
@@ -422,10 +422,10 @@ gh api /rate_limit
 
 ```bash
 # Watcherのログを確認
-tail -f workspace/logs/github_watcher.log
+tail -f workspace/.ignite/logs/github_watcher.log
 
 # 生成されたメッセージを確認
-ls -la workspace/queue/leader/github_*.mime
+ls -la workspace/.ignite/queue/leader/github_*.mime
 ```
 
 ## セキュリティに関する注意
@@ -487,7 +487,7 @@ ignite watcher ack 123 owner/repo
 
 # パス取得
 REPO_PATH=$(./scripts/utils/setup_repo.sh path owner/repo)
-echo $REPO_PATH  # workspace/repos/owner_repo
+echo $REPO_PATH  # workspace/.ignite/repos/owner_repo
 
 # Issue用ブランチ作成
 ./scripts/utils/setup_repo.sh branch "$REPO_PATH" 123

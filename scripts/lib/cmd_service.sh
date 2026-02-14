@@ -355,6 +355,10 @@ _service_setup_env() {
         fi
     fi
 
+    # CLI Provider 固有の環境変数を取得
+    local _cli_env_vars
+    _cli_env_vars=$(cli_get_env_vars 2>/dev/null || echo "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1")
+
     # 最小テンプレート生成
     cat > "$env_file" <<ENVEOF
 # IGNITE - systemd EnvironmentFile
@@ -365,7 +369,7 @@ HOME=${HOME}
 TERM=xterm-256color
 
 ANTHROPIC_API_KEY=your-api-key-here
-CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+${_cli_env_vars}
 
 XDG_CONFIG_HOME=${HOME}/.config
 XDG_DATA_HOME=${HOME}/.local/share

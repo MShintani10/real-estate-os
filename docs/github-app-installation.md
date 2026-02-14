@@ -93,7 +93,7 @@ cp config/github-app.yaml.example config/github-app.yaml
 # config/github-app.yaml
 github_app:
   app_id: "YOUR_APP_ID"
-  private_key_path: "~/.config/ignite/github-app-private-key.pem"
+  private_key_path: "github-app-private-key.pem"  # .ignite/ からの相対パス
   app_name: "ignite-gh-app"
 ```
 
@@ -244,7 +244,7 @@ access_control:
 
 4. **ログを確認**:
    ```bash
-   cat workspace/logs/github_watcher.log
+   cat workspace/.ignite/logs/github_watcher.log
    ```
 
 ### 権限エラー（`Resource not accessible by integration`）
@@ -291,14 +291,14 @@ rm config/github-app.yaml
 rm config/github-watcher.yaml
 
 # Private Key を削除
-rm ~/.config/ignite/github-app-private-key.pem
+rm .ignite/github-app-private-key.pem
 ```
 
 > **Note**: GitHub Watcher を引き続き使用する場合は、`config/github-watcher.yaml` は削除しないでください。
 
 ## 8. セキュリティ注意事項
 
-1. **Private Key の保護**: `~/.config/ignite/github-app-private-key.pem` は `chmod 600` で権限を制限し、決してリポジトリにコミットしないでください
+1. **Private Key の保護**: `.ignite/github-app-private-key.pem` は `chmod 600` で権限を制限してください（`.gitignore` で自動除外済み）
 2. **最小権限の原則**: インストール時は「Only select repositories」を選択し、必要なリポジトリのみにインストールしてください
 3. **トークンの扱い**: GitHub App Token は短期間で自動失効しますが、ログファイル等に出力しないよう注意してください
 4. **設定ファイルの管理**: `config/github-app.yaml` は `.gitignore` に追加されており、リポジトリにコミットされません

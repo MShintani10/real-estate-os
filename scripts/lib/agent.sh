@@ -70,27 +70,32 @@ start_agent() {
         tmux select-layout -t "$SESSION_NAME:$TMUX_WINDOW_NAME" tiled
         tmux set-option -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane" -p @agent_name "${name} (${role^})"
 
-        # Claude CLI 起動（ワークスペースディレクトリで実行）
-        tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane" \
-            "${_gh_export}export WORKSPACE_DIR='$WORKSPACE_DIR' && cd '$WORKSPACE_DIR' && CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --model $DEFAULT_MODEL --dangerously-skip-permissions --teammate-mode in-process" Enter
+        # CLI 起動（ワークスペースディレクトリで実行）
+        local _launch_cmd
+        _launch_cmd=$(cli_build_launch_command "$WORKSPACE_DIR" "" "$_gh_export")
+        tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane" "$_launch_cmd" Enter
         sleep "$(get_delay leader_startup 3)"
 
-        # 権限確認通過
-        tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane" Down
-        sleep "$(get_delay permission_accept 0.5)"
-        tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane" Enter
+        # 権限確認通過（プロバイダーが必要とする場合のみ）
+        if cli_needs_permission_accept; then
+            tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane" Down
+            sleep "$(get_delay permission_accept 0.5)"
+            tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane" Enter
+        fi
         sleep "$(get_delay claude_startup 8)"
 
         # 起動確認（ヘルスチェック）
         local _health
         _health=$(check_agent_health "$SESSION_NAME:$TMUX_WINDOW_NAME" "$pane" "${name} (${role^})")
         if [[ "$_health" != "missing" ]]; then
-            # システムプロンプト読み込み（絶対パスを使用）
-            tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane" \
-                "$IGNITE_CHARACTERS_DIR/${role}.md と $IGNITE_INSTRUCTIONS_DIR/${role}.md を読んで、あなたは${name}として振る舞ってください。ワークスペースは $WORKSPACE_DIR です。$WORKSPACE_DIR/queue/${role}/ のメッセージを監視してください。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
+            # TUI 入力受付待機（OpenCode は TUI 描画完了まで入力不可）
+            local _target="$SESSION_NAME:$TMUX_WINDOW_NAME.$pane"
+            cli_wait_tui_ready "$_target"
+            # プロンプト先頭を / 以外にする（OpenCode のスラッシュコマンドメニュー回避）
+            tmux send-keys -l -t "$_target" \
+                "以下のファイルを読んでください: $IGNITE_CHARACTERS_DIR/${role}.md と $IGNITE_INSTRUCTIONS_DIR/${role}.md あなたは${name}として振る舞ってください。ワークスペースは $WORKSPACE_DIR です。$IGNITE_RUNTIME_DIR/queue/${role}/ のメッセージを監視してください。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
             sleep "$(get_delay prompt_send 0.3)"
-            tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane" C-m
-            sleep "$(get_delay agent_stabilize 2)"  # プロンプト送信後の安定待機
+            eval "tmux send-keys -t \"$_target\" $(cli_get_submit_keys)"
             print_success "${name} 起動完了"
             return 0
         fi
@@ -113,7 +118,7 @@ start_ignitian() {
     local retry=0
 
     # IGNITIANキューディレクトリを作成
-    mkdir -p "$WORKSPACE_DIR/queue/ignitian_${id}"
+    mkdir -p "$IGNITE_RUNTIME_DIR/queue/ignitian_${id}"
 
     while [[ $retry -lt $max_retries ]]; do
         print_info "IGNITIAN-${id} を起動中... (試行 $((retry+1))/$max_retries)"
@@ -123,27 +128,32 @@ start_ignitian() {
         tmux select-layout -t "$SESSION_NAME:$TMUX_WINDOW_NAME" tiled
         tmux set-option -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane" -p @agent_name "IGNITIAN-${id}"
 
-        # IGNITE_WORKER_ID を設定して Claude CLI 起動（per-IGNITIAN リポジトリ分離用）
-        tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane" \
-            "${_gh_export}export WORKSPACE_DIR='$WORKSPACE_DIR' && export IGNITE_WORKER_ID=${id} && cd '$WORKSPACE_DIR' && CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --model $DEFAULT_MODEL --dangerously-skip-permissions --teammate-mode in-process" Enter
+        # IGNITE_WORKER_ID を設定して CLI 起動（per-IGNITIAN リポジトリ分離用）
+        local _launch_cmd
+        _launch_cmd=$(cli_build_launch_command "$WORKSPACE_DIR" "export IGNITE_WORKER_ID=${id} && " "$_gh_export")
+        tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane" "$_launch_cmd" Enter
         sleep "$(get_delay leader_startup 3)"
 
-        # 権限確認通過
-        tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane" Down
-        sleep "$(get_delay permission_accept 0.5)"
-        tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane" Enter
+        # 権限確認通過（プロバイダーが必要とする場合のみ）
+        if cli_needs_permission_accept; then
+            tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane" Down
+            sleep "$(get_delay permission_accept 0.5)"
+            tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane" Enter
+        fi
         sleep "$(get_delay claude_startup 8)"
 
         # 起動確認（ヘルスチェック）
         local _health
         _health=$(check_agent_health "$SESSION_NAME:$TMUX_WINDOW_NAME" "$pane" "IGNITIAN-${id}")
         if [[ "$_health" != "missing" ]]; then
-            # システムプロンプト読み込み（絶対パスを使用）
-            tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane" \
-                "$IGNITE_CHARACTERS_DIR/ignitian.md と $IGNITE_INSTRUCTIONS_DIR/ignitian.md を読んで、あなたはIGNITIAN-${id}として振る舞ってください。ワークスペースは $WORKSPACE_DIR です。$WORKSPACE_DIR/queue/ignitian_${id}/ ディレクトリを監視してください。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
+            # TUI 入力受付待機（OpenCode は TUI 描画完了まで入力不可）
+            local _target="$SESSION_NAME:$TMUX_WINDOW_NAME.$pane"
+            cli_wait_tui_ready "$_target"
+            # プロンプト先頭を / 以外にする（OpenCode のスラッシュコマンドメニュー回避）
+            tmux send-keys -l -t "$_target" \
+                "以下のファイルを読んでください: $IGNITE_CHARACTERS_DIR/ignitian.md と $IGNITE_INSTRUCTIONS_DIR/ignitian.md あなたはIGNITIAN-${id}として振る舞ってください。ワークスペースは $WORKSPACE_DIR です。$IGNITE_RUNTIME_DIR/queue/ignitian_${id}/ ディレクトリを監視してください。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
             sleep "$(get_delay prompt_send 0.3)"
-            tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane" C-m
-            sleep "$(get_delay agent_stabilize 2)"  # プロンプト送信後の安定待機
+            eval "tmux send-keys -t \"$_target\" $(cli_get_submit_keys)"
             print_success "IGNITIAN-${id} 起動完了"
             return 0
         fi

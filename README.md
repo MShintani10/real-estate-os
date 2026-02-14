@@ -325,7 +325,7 @@ ignite status
 watch -n 5 ignite status
 
 # または直接ダッシュボードファイルを表示
-cat workspace/dashboard.md
+cat workspace/.ignite/dashboard.md
 ```
 
 #### ログを確認
@@ -524,22 +524,23 @@ ignite/
 │   └── github-watcher.yaml     # GitHub Watcher設定
 │
 ├── workspace/                  # 実行時ワークスペース（.gitignoreで除外）
-│   ├── queue/                  # メッセージキュー（各エージェント用）
-│   │   ├── leader/
-│   │   ├── strategist/
-│   │   ├── architect/
-│   │   ├── evaluator/
-│   │   ├── coordinator/
-│   │   ├── innovator/
-│   │   ├── ignitian_1/          # IGNITIAN-1キュー
-│   │   ├── ignitian_2/          # IGNITIAN-2キュー
-│   │   └── ignitian_{n}/        # IGNITIAN-Nキュー（動的）
-│   ├── context/                # プロジェクトコンテキスト
-│   ├── state/                  # 状態管理ファイル
-│   │   └── report_issues.json  # 日次レポートIssue番号キャッシュ
-│   ├── memory.db               # SQLiteエージェントメモリDB
-│   ├── logs/                   # ログファイル
-│   └── dashboard.md            # リアルタイム進捗ダッシュボード
+│   └── .ignite/                # ランタイムデータ
+│       ├── queue/              # メッセージキュー（各エージェント用）
+│       │   ├── leader/
+│       │   ├── strategist/
+│       │   ├── architect/
+│       │   ├── evaluator/
+│       │   ├── coordinator/
+│       │   ├── innovator/
+│       │   ├── ignitian_1/      # IGNITIAN-1キュー
+│       │   ├── ignitian_2/      # IGNITIAN-2キュー
+│       │   └── ignitian_{n}/    # IGNITIAN-Nキュー（動的）
+│       ├── context/            # プロジェクトコンテキスト
+│       ├── state/              # 状態管理ファイル
+│       │   └── report_issues.json  # 日次レポートIssue番号キャッシュ
+│       ├── memory.db           # SQLiteエージェントメモリDB
+│       ├── logs/               # ログファイル
+│       └── dashboard.md        # リアルタイム進捗ダッシュボード
 │
 ├── docs/                       # ドキュメント
 │   ├── architecture.md         # アーキテクチャ詳細
@@ -639,7 +640,7 @@ ignite start --agents leader
 **注意事項:**
 - 複雑なタスクや大規模な変更には通常モード（協調モード）を推奨します
 - 単独モードではLeaderのログに `[SOLO]` タグが追加されます
-- 設定は `workspace/system_config.yaml` の `system.agent_mode` で管理されます
+- 設定は `workspace/.ignite/runtime.yaml` の `system.agent_mode` で管理されます
 
 ### タスクの種類別の使用例
 
@@ -792,7 +793,7 @@ ignite --version
 
 ### ダッシュボードの見方
 
-`workspace/dashboard.md` の例:
+`workspace/.ignite/dashboard.md` の例:
 
 ```markdown
 # IGNITE Dashboard
@@ -911,10 +912,10 @@ Ctrl+b q 6  # IGNITIAN-1のペインへ移動
 
 ```bash
 # ダッシュボードファイルの存在確認
-ls -la workspace/dashboard.md
+ls -la workspace/.ignite/dashboard.md
 
 # 手動で再作成
-cat > workspace/dashboard.md <<EOF
+cat > workspace/.ignite/dashboard.md <<EOF
 # IGNITE Dashboard
 
 更新日時: $(date '+%Y-%m-%d %H:%M:%S')

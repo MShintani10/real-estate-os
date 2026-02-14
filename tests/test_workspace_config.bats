@@ -50,6 +50,7 @@ YAML
     # core.sh をソース
     export PROJECT_ROOT="$SCRIPTS_DIR/.."
     export WORKSPACE_DIR="$TEST_TEMP_DIR/workspace"
+    export IGNITE_RUNTIME_DIR="$WORKSPACE_DIR"
     mkdir -p "$WORKSPACE_DIR"
 
     source "$SCRIPTS_DIR/lib/core.sh"
@@ -183,7 +184,7 @@ YAML
 
     cmd_init --minimal -w "$target"
     [[ -d "$target/.ignite" ]]
-    [[ -f "$target/.ignite/.gitignore" ]]
+    [[ -f "$target/.gitignore" ]]
 }
 
 @test "TC-11: cmd_init - .ignite/ 既存で --force なし → 終了コード1" {
@@ -199,11 +200,11 @@ YAML
     source "$SCRIPTS_DIR/lib/cmd_init.sh"
     local target="$TEST_TEMP_DIR/init_force"
     mkdir -p "$target/.ignite"
-    echo "old" > "$target/.ignite/.gitignore"
+    echo "old" > "$target/.gitignore"
 
     cmd_init --force --minimal -w "$target"
-    [[ -f "$target/.ignite/.gitignore" ]]
-    ! grep -q "^old$" "$target/.ignite/.gitignore"
+    [[ -f "$target/.gitignore" ]]
+    ! grep -q "^old$" "$target/.gitignore"
 }
 
 @test "TC-13: cmd_init - --minimal で system.yaml のみコピー" {
@@ -249,13 +250,13 @@ YAML
 # TC-17〜TC-20: セキュリティ + .gitignore テスト
 # =============================================================================
 
-@test "TC-17: .gitignore に github-app.yaml が含まれる" {
+@test "TC-17: .gitignore に github-app.yaml が含まれない（コミット可能）" {
     source "$SCRIPTS_DIR/lib/cmd_init.sh"
     local target="$TEST_TEMP_DIR/init_gitignore"
     mkdir -p "$target"
 
     cmd_init --minimal -w "$target"
-    grep -q "github-app.yaml" "$target/.ignite/.gitignore"
+    ! grep -q "github-app.yaml" "$target/.gitignore"
 }
 
 @test "TC-18: .gitignore に *.pem が含まれる" {
@@ -264,7 +265,7 @@ YAML
     mkdir -p "$target"
 
     cmd_init --minimal -w "$target"
-    grep -q '\*.pem' "$target/.ignite/.gitignore"
+    grep -q '\*.pem' "$target/.gitignore"
 }
 
 @test "TC-19: validate_workspace_config - github-app.yaml 存在時に警告" {

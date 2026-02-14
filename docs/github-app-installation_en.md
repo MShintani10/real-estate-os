@@ -93,7 +93,7 @@ Edit the configuration file to enter the App ID and Private Key path:
 # config/github-app.yaml
 github_app:
   app_id: "YOUR_APP_ID"
-  private_key_path: "~/.config/ignite/github-app-private-key.pem"
+  private_key_path: "github-app-private-key.pem"  # relative to .ignite/
   app_name: "ignite-gh-app"
 ```
 
@@ -243,7 +243,7 @@ access_control:
 
 4. **Check logs**:
    ```bash
-   cat workspace/logs/github_watcher.log
+   cat workspace/.ignite/logs/github_watcher.log
    ```
 
 ### Permission Error (`Resource not accessible by integration`)
@@ -290,14 +290,14 @@ rm config/github-app.yaml
 rm config/github-watcher.yaml
 
 # Remove Private Key
-rm ~/.config/ignite/github-app-private-key.pem
+rm .ignite/github-app-private-key.pem
 ```
 
 > **Note**: If you continue to use GitHub Watcher, do not delete `config/github-watcher.yaml`.
 
 ## 8. Security Notes
 
-1. **Private Key protection**: Restrict permissions on `~/.config/ignite/github-app-private-key.pem` with `chmod 600` and never commit it to a repository
+1. **Private Key protection**: Restrict permissions on `.ignite/github-app-private-key.pem` with `chmod 600` (automatically excluded by `.gitignore`)
 2. **Principle of least privilege**: Select "Only select repositories" during installation and only install to necessary repositories
 3. **Token handling**: GitHub App Tokens automatically expire after a short period, but avoid outputting them to log files
 4. **Configuration file management**: `config/github-app.yaml` is added to `.gitignore` and will not be committed to the repository

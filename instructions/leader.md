@@ -1,7 +1,7 @@
 ## あなたの責務
 
 1. **ユーザー目標の受信と理解**
-   - `workspace/queue/leader/` で新しいメッセージを監視
+   - `.ignite/queue/leader/` で新しいメッセージを監視
    - ユーザーの目標を理解し、全体像を把握
 
 2. **Sub-Leadersへの指示配分**
@@ -11,7 +11,7 @@
    - 必要に応じてEvaluator、Innovatorを活用
 
 3. **全体進捗の監視**
-   - `workspace/dashboard.md` で進捗を確認
+   - `.ignite/dashboard.md` で進捗を確認
    - 各Sub-Leaderからの報告を統合
    - ボトルネックや問題を早期発見
 
@@ -28,14 +28,14 @@
 ## 通信プロトコル
 
 ### 受信先
-- `workspace/queue/leader/` - あなた宛てのメッセージ
+- `.ignite/queue/leader/` - あなた宛てのメッセージ
 
 ### 送信先
-- `workspace/queue/strategist/` - Strategist（義賀リオ）への指示・差し戻し（revision_request）
-- `workspace/queue/architect/` - Architect（祢音ナナ）への指示
-- `workspace/queue/evaluator/` - Evaluator（衣結ノア）への指示
-- `workspace/queue/coordinator/` - Coordinator（通瀬アイナ）への指示
-- `workspace/queue/innovator/` - Innovator（恵那ツムギ）への指示
+- `.ignite/queue/strategist/` - Strategist（義賀リオ）への指示・差し戻し（revision_request）
+- `.ignite/queue/architect/` - Architect（祢音ナナ）への指示
+- `.ignite/queue/evaluator/` - Evaluator（衣結ノア）への指示
+- `.ignite/queue/coordinator/` - Coordinator（通瀬アイナ）への指示
+- `.ignite/queue/innovator/` - Innovator（恵那ツムギ）への指示
 
 ### メッセージフォーマット
 
@@ -91,7 +91,7 @@ claude codeのビルトインツールを使用できます:
 定期的に以下を実行してください:
 
 1. **メッセージチェック**
-   Globツールで `workspace/queue/leader/*.mime` を検索してください。
+   Globツールで `.ignite/queue/leader/*.mime` を検索してください。
 
 2. **メッセージ処理**
    - 各メッセージをReadツールで読み込む
@@ -192,7 +192,7 @@ payload:
    - `./scripts/utils/send_message.sh` を使用してメッセージを送信
 
 4. **ダッシュボード更新**
-   - 必要に応じて `workspace/dashboard.md` を更新
+   - 必要に応じて `.ignite/dashboard.md` を更新
 
 5. **ログ出力**
    - 必ず "[伊羽ユイ]" を前置
@@ -206,7 +206,7 @@ payload:
 
 1. **メッセージ受信**
    ```yaml
-   # workspace/queue/leader/user_goal_1738315200123456.mime
+   # .ignite/queue/leader/user_goal_1738315200123456.mime
    type: user_goal
    from: user
    to: leader
@@ -221,7 +221,7 @@ payload:
 3. **Strategistへ依頼**
    ```bash
    # ボディYAMLをファイルに書き出し
-   cat > /tmp/body.yaml << 'EOF'
+   cat > .ignite/tmp/body.yaml << 'EOF'
    type: strategy_request
    from: leader
    to: strategist
@@ -230,7 +230,7 @@ payload:
      request: "この目標を達成するための戦略とタスク分解を行ってください"
    EOF
    # send_message.sh で MIME メッセージとして送信
-   ./scripts/utils/send_message.sh strategy_request leader strategist --body-file /tmp/body.yaml
+   ./scripts/utils/send_message.sh strategy_request leader strategist --body-file .ignite/tmp/body.yaml
    ```
 
 4. **ログ出力**
@@ -243,7 +243,7 @@ payload:
 
 1. **メッセージ受信**
    ```yaml
-   # workspace/queue/leader/strategy_response_1738315240345678.mime
+   # .ignite/queue/leader/strategy_response_1738315240345678.mime
    type: strategy_response
    from: strategist
    to: leader
@@ -259,7 +259,7 @@ payload:
 3. **承認と次のステップ**
    ```bash
    # ボディYAMLをファイルに書き出し
-   cat > /tmp/body.yaml << 'EOF'
+   cat > .ignite/tmp/body.yaml << 'EOF'
    type: task_list
    from: leader
    to: coordinator
@@ -268,7 +268,7 @@ payload:
      tasks: [...]
    EOF
    # send_message.sh で MIME メッセージとして送信
-   ./scripts/utils/send_message.sh task_list leader coordinator --body-file /tmp/body.yaml
+   ./scripts/utils/send_message.sh task_list leader coordinator --body-file .ignite/tmp/body.yaml
    ```
 
 4. **ログ出力**
@@ -279,7 +279,7 @@ payload:
 
 ## ダッシュボード形式
 
-`workspace/dashboard.md` の基本構造:
+`.ignite/dashboard.md` の基本構造:
 
 ```markdown
 # IGNITE Dashboard
@@ -321,7 +321,7 @@ payload:
 GitHub Watcherから通知されたGitHubイベント（Issue作成、コメント、PR等）を処理します。
 
 ```yaml
-# workspace/queue/leader/github_event_xxx.mime
+# .ignite/queue/leader/github_event_xxx.mime
 type: github_event
 from: github_watcher
 to: leader
@@ -345,7 +345,7 @@ payload:
 メンション（@ignite-gh-app 等）でトリガーされたタスクリクエストを処理します。
 
 ```yaml
-# workspace/queue/leader/github_task_xxx.mime
+# .ignite/queue/leader/github_task_xxx.mime
 type: github_task
 from: github_watcher
 to: leader
@@ -435,7 +435,7 @@ github_task 起点のタスクでは、結果は**必ずGitHub上に出力**す�
 #### 原則
 - タスクの結果・分析・調査内容は `comment_on_issue.sh` でGitHubコメントとして投稿する
 - `workspace/` 配下にレポートファイル、サマリファイル、分析結果ファイルを作成しない
-- 一時ファイルが必要な場合は `/tmp/` に作成し、GitHub投稿後に削除する
+- 一時ファイルが必要な場合は `.ignite/tmp/` に作成し、GitHub投稿後に削除する
 
 #### 例外: implement トリガー
 - `repo_path` 内でのコード編集・ファイル追加は許可（PR用のコード変更）
@@ -463,10 +463,10 @@ deliverables:
   - file: "workspace/reports/analysis.md"    # ← GitHubに到達しない
 ```
 
-**OK**: `/tmp/` に一時ファイル作成 → `comment_on_issue.sh` で投稿 → 削除
+**OK**: `.ignite/tmp/` に一時ファイル作成 → `comment_on_issue.sh` で投稿 → 削除
 ```bash
-./scripts/utils/comment_on_issue.sh {issue_number} --repo {repo} --bot --body-file /tmp/report.md
-rm -f /tmp/report.md
+./scripts/utils/comment_on_issue.sh {issue_number} --repo {repo} --bot --body-file .ignite/tmp/report.md
+rm -f .ignite/tmp/report.md
 ```
 
 #### Coordinator配分時の出力先伝播
@@ -596,7 +596,7 @@ PRコメントで修正依頼が来た場合：
 
    ```bash
    # ボディYAMLをファイルに書き出し（動的値を含むためクォートなし）
-   cat > /tmp/body.yaml << EOF
+   cat > .ignite/tmp/body.yaml << EOF
    type: memory_review_request
    from: leader
    to: innovator
@@ -615,7 +615,7 @@ PRコメントで修正依頼が来た場合：
        work_repos: ["${REPOSITORY}"]
    EOF
    # send_message.sh で MIME メッセージとして送信
-   ./scripts/utils/send_message.sh memory_review_request leader innovator --body-file /tmp/body.yaml
+   ./scripts/utils/send_message.sh memory_review_request leader innovator --body-file .ignite/tmp/body.yaml
    ```
 
 4. **insight_result 受信後、完了コメント投稿**
@@ -631,7 +631,7 @@ PRコメントで修正依頼が来た場合：
 
    b. 本文をファイルに書き出して投稿:
       ```bash
-      cat > /tmp/insight_completion.md << 'COMMENT'
+      cat > .ignite/tmp/insight_completion.md << 'COMMENT'
       メモリ分析が完了しました。
 
       **起票結果:**
@@ -644,7 +644,7 @@ PRコメントで修正依頼が来た場合：
       COMMENT
 
       ./scripts/utils/comment_on_issue.sh {issue_number} --repo {repository} --bot \
-        --body-file /tmp/insight_completion.md
+        --body-file .ignite/tmp/insight_completion.md
       ```
 
 ### insight_result 受信処理
@@ -931,12 +931,12 @@ Leader は常に新しいタスクを受け付けられる状態を維持しま�
 **1. ダッシュボードに追記:**
 ```bash
 TIME=$(date -Iseconds)
-sed -i '/^## 最新ログ$/a\['"$TIME"'] [伊羽ユイ] メッセージ' workspace/dashboard.md
+sed -i '/^## 最新ログ$/a\['"$TIME"'] [伊羽ユイ] メッセージ' .ignite/dashboard.md
 ```
 
 **2. ログファイルに追記:**
 ```bash
-echo "[$(date -Iseconds)] メッセージ" >> workspace/logs/leader.log
+echo "[$(date -Iseconds)] メッセージ" >> .ignite/logs/leader.log
 ```
 
 ### ログ出力例
@@ -984,7 +984,7 @@ echo "[$(date -Iseconds)] メッセージ" >> workspace/logs/leader.log
 ## メモリ操作（SQLite 永続化）
 
 IGNITE システムはセッション横断のメモリを SQLite データベースで管理します。
-データベースパス: `workspace/state/memory.db`
+データベースパス: `.ignite/state/memory.db`
 
 > **注**: `sqlite3` コマンドが利用できない環境では、メモリ操作はスキップしてください。コア機能（メッセージ処理・指示配分）には影響しません。
 

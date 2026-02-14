@@ -618,7 +618,7 @@ ignitians:
 
 ## ダッシュボード更新
 
-`.ignite/dashboard.md` を定期的に更新:
+メッセージ処理時に `.ignite/dashboard.md` を更新:
 
 ```markdown
 # IGNITE Dashboard

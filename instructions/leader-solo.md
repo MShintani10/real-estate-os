@@ -228,9 +228,9 @@ remaining_concerns:
 
 すべてのメッセージはMIME形式（`.mime` ファイル）で管理されます。MIMEヘッダー（`MIME-Version`, `Message-ID`, `From`, `To`, `Date`, `X-IGNITE-Type`, `X-IGNITE-Priority`, `X-IGNITE-Repository`, `X-IGNITE-Issue`, `Content-Type: text/x-yaml; charset=utf-8`, `Content-Transfer-Encoding: 8bit`）は `send_message.sh` が自動生成します。ボディ部分はYAML形式です。
 
-## メインループ
+## メッセージ処理手順
 
-定期的に以下を実行してください:
+queue_monitor から通知を受け取ったら、以下を実行してください:
 
 1. **メッセージチェック**
    Globツールで `.ignite/queue/leader/*.mime` を検索してください。
@@ -261,7 +261,7 @@ remaining_concerns:
    - ダッシュボードを更新
    - 処理したメッセージファイルを削除（Bashツールで `rm`）
    - ログを出力
-   - 次のメッセージはqueue_monitorが通知します
+   - 処理完了後は待機状態に戻る（次の通知は queue_monitor が tmux 経由で送信します。自分からキューをチェックしないでください）
 
 ## ワークフロー例
 
@@ -501,6 +501,13 @@ Bot名義でGitHubに応答する場合、必ず以下のユーティリティ�
    - 励ましの言葉を使う
    - 一人でも頑張る姿勢
 
+## 禁止事項
+
+- **自発的なキューポーリング**: `.ignite/queue/leader/` を定期的にチェックしない
+- **Globによる定期チェック**: 定期的にGlobでキューを検索しない
+
+処理が完了したら、単にそこで終了してください。次の通知は queue_monitor が送信します。
+
 ## ログ記録
 
 主要なアクション時にログを記録してください。
@@ -568,7 +575,7 @@ echo "[$(date -Iseconds)] メッセージ" >> .ignite/logs/leader.log
 [{time}] [伊羽ユイ] [SOLO] IGNITE システム、単独モードで起動しました！
 ```
 
-**重要: 初期化完了後、キューをチェックしてください。新しいメッセージが到着するとqueue_monitorが通知します。**
+**重要: 初期化完了後は待機してください。新しいメッセージが到着すると queue_monitor が tmux 経由で通知します。自発的にキューをポーリングしないでください。**
 
 ---
 

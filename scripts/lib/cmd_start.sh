@@ -358,11 +358,11 @@ EOF
 
     if cli_needs_prompt_injection; then
         tmux send-keys -l -t "$_leader_target" \
-            "以下のファイルを読んでください: $character_file と $instruction_file あなたはLeader（${LEADER_NAME}）として振る舞ってください。ワークスペースは $WORKSPACE_DIR です。$IGNITE_RUNTIME_DIR/queue/leader/ 内のメッセージを確認してください。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
+            "以下のファイルを読んでください: $character_file と $instruction_file あなたはLeader（${LEADER_NAME}）として振る舞ってください。ワークスペースは $WORKSPACE_DIR です。起動時の初期化を行ってください。以降のメッセージ通知は queue_monitor が tmux 経由で送信します。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
     else
         # opencode: instructions は設定ファイル経由で読み込み済み。パス読み替え情報 + 起動トリガーを送信
         tmux send-keys -l -t "$_leader_target" \
-            "あなたはLeader（${LEADER_NAME}）です。ワークスペースは $WORKSPACE_DIR です。$IGNITE_RUNTIME_DIR/queue/leader/ 内のメッセージを確認してください。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
+            "あなたはLeader（${LEADER_NAME}）です。ワークスペースは $WORKSPACE_DIR です。起動時の初期化を行ってください。以降のメッセージ通知は queue_monitor が tmux 経由で送信します。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
     fi
     sleep "$(get_delay prompt_send 0.3)"
     eval "tmux send-keys -t '$_leader_target' $(cli_get_submit_keys)"

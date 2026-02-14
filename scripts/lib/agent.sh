@@ -98,11 +98,11 @@ start_agent() {
             # プロンプト先頭を / 以外にする（OpenCode のスラッシュコマンドメニュー回避）
             if cli_needs_prompt_injection; then
                 tmux send-keys -l -t "$_target" \
-                    "以下のファイルを読んでください: $IGNITE_CHARACTERS_DIR/${role}.md と $IGNITE_INSTRUCTIONS_DIR/${role}.md あなたは${name}として振る舞ってください。ワークスペースは $WORKSPACE_DIR です。$IGNITE_RUNTIME_DIR/queue/${role}/ のメッセージを監視してください。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
+                    "以下のファイルを読んでください: $IGNITE_CHARACTERS_DIR/${role}.md と $IGNITE_INSTRUCTIONS_DIR/${role}.md あなたは${name}として振る舞ってください。ワークスペースは $WORKSPACE_DIR です。起動時の初期化を行ってください。以降のメッセージ通知は queue_monitor が tmux 経由で送信します。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
             else
                 # opencode: instructions は opencode_{role}.json 経由で読み込み済み
                 tmux send-keys -l -t "$_target" \
-                    "あなたは${name}（${role^}）です。ワークスペースは $WORKSPACE_DIR です。$IGNITE_RUNTIME_DIR/queue/${role}/ のメッセージを監視してください。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
+                    "あなたは${name}（${role^}）です。ワークスペースは $WORKSPACE_DIR です。起動時の初期化を行ってください。以降のメッセージ通知は queue_monitor が tmux 経由で送信します。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
             fi
             sleep "$(get_delay prompt_send 0.3)"
             eval "tmux send-keys -t \"$_target\" $(cli_get_submit_keys)"
@@ -166,11 +166,11 @@ start_ignitian() {
             # プロンプト先頭を / 以外にする（OpenCode のスラッシュコマンドメニュー回避）
             if cli_needs_prompt_injection; then
                 tmux send-keys -l -t "$_target" \
-                    "以下のファイルを読んでください: $IGNITE_CHARACTERS_DIR/ignitian.md と $IGNITE_INSTRUCTIONS_DIR/ignitian.md あなたはIGNITIAN-${id}として振る舞ってください。ワークスペースは $WORKSPACE_DIR です。$IGNITE_RUNTIME_DIR/queue/ignitian_${id}/ ディレクトリを監視してください。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
+                    "以下のファイルを読んでください: $IGNITE_CHARACTERS_DIR/ignitian.md と $IGNITE_INSTRUCTIONS_DIR/ignitian.md あなたはIGNITIAN-${id}として振る舞ってください。ワークスペースは $WORKSPACE_DIR です。起動時の初期化を行ってください。以降のメッセージ通知は queue_monitor が tmux 経由で送信します。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
             else
                 # opencode: instructions は opencode_ignitian_${id}.json 経由で読み込み済み
                 tmux send-keys -l -t "$_target" \
-                    "あなたはIGNITIAN-${id}です。ワークスペースは $WORKSPACE_DIR です。$IGNITE_RUNTIME_DIR/queue/ignitian_${id}/ ディレクトリを監視してください。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
+                    "あなたはIGNITIAN-${id}です。ワークスペースは $WORKSPACE_DIR です。起動時の初期化を行ってください。以降のメッセージ通知は queue_monitor が tmux 経由で送信します。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
             fi
             sleep "$(get_delay prompt_send 0.3)"
             eval "tmux send-keys -t \"$_target\" $(cli_get_submit_keys)"

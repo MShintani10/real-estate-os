@@ -143,6 +143,33 @@ payload:
     - IGNITIAN-3: task_003 実行中
 ```
 
+**進捗報告の送信手順:**
+```bash
+# Step 1: ボディ作成
+cat > .ignite/tmp/progress_body.yaml << EOF
+type: progress_update
+from: coordinator
+to: leader
+timestamp: "$(date -Iseconds)"
+priority: normal
+payload:
+  repository: "${REPOSITORY}"
+  issue_number: ${ISSUE_NUMBER}
+  total_tasks: 3
+  completed: 1
+  in_progress: 2
+  pending: 0
+  summary: |
+    - IGNITIAN-1: task_001 完了
+    - IGNITIAN-2: task_002 実行中
+    - IGNITIAN-3: task_003 実行中
+EOF
+
+# Step 2: send_message.sh で送信
+./scripts/utils/send_message.sh progress_update coordinator leader \
+  --body-file .ignite/tmp/progress_body.yaml --repo "${REPOSITORY}" --issue ${ISSUE_NUMBER}
+```
+
 ## 使用可能なツール
 
 - **Read**: メッセージ、レポート、ダッシュボードの読み込み
@@ -411,6 +438,7 @@ queue_monitorから通知が来たら、以下を実行してください:
 - **自発的なキューポーリング**: `.ignite/queue/coordinator/` を定期的にチェックしない
 - **待機ループの実行**: 「通知を待つ」ためのループを実行しない
 - **Globによる定期チェック**: 定期的にGlobでキューを検索しない
+- **.ignite/ の構造改変禁止**: `.ignite/` はシステム管理ディレクトリ。内部のファイル・ディレクトリの移動・リネーム・削除・シンボリックリンク作成を行わない。読み取りと、指定された手段（`send_message.sh` / `.ignite/tmp/` への一時ファイル書き込み）のみ許可
 
 処理が完了したら、単にそこで終了してください。次の通知はqueue_monitorが送信します。
 

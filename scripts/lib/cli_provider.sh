@@ -40,7 +40,13 @@ cli_build_launch_command() {
     local extra_env="${2:-}"
     local gh_export="${3:-}"
 
-    local cmd="${gh_export}${extra_env}export WORKSPACE_DIR='${workspace_dir}' && cd '${workspace_dir}' && "
+    # .env が存在すれば tmux ペイン内で source（親プロセスの env は tmux に継承されない）
+    local env_source=""
+    if [[ -f "${workspace_dir}/.ignite/.env" ]]; then
+        env_source="set -a && source '${workspace_dir}/.ignite/.env' && set +a && "
+    fi
+
+    local cmd="${gh_export}${extra_env}${env_source}export WORKSPACE_DIR='${workspace_dir}' IGNITE_RUNTIME_DIR='${workspace_dir}/.ignite' && cd '${workspace_dir}' && "
 
     case "$CLI_PROVIDER" in
         claude)
@@ -184,10 +190,7 @@ cli_setup_project_config() {
             if [[ ! -d "${workspace_dir}/.ignite" ]]; then
                 config_file="${workspace_dir}/opencode.json"
             fi
-            if [[ -f "$config_file" ]]; then
-                log_info "既存の opencode.json を保持します: $config_file"
-                return 0
-            fi
+            # 起動ごとに再生成（model や instructions が変わりうるため）
 
             # instructions JSON 配列を構築
             local instructions_json="[]"
@@ -231,21 +234,7 @@ cli_get_env_vars() {
             ;;
         opencode)
             echo "OPENCODE_CONFIG=.ignite/opencode.json"
-            # OpenCode はモデルプレフィックスから API Key を判定
-            if [[ -n "$CLI_MODEL" ]]; then
-                local prefix="${CLI_MODEL%%/*}"
-                case "$prefix" in
-                    openai)
-                        echo "OPENAI_API_KEY=your-openai-api-key-here"
-                        ;;
-                    anthropic)
-                        echo "ANTHROPIC_API_KEY=your-api-key-here"
-                        ;;
-                    ollama)
-                        # ollama はローカル実行のため API Key 不要
-                        ;;
-                esac
-            fi
+            # API Key は .ignite/.env から読み込み（cli_get_env_vars では出力しない）
             ;;
     esac
 }

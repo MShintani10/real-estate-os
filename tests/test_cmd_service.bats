@@ -271,7 +271,9 @@ teardown() {
 
     local content
     content=$(cat "$TEST_TEMP_DIR/ignite_config/env")
-    [[ "$content" == *"ANTHROPIC_API_KEY"* ]]
+    # 上書き後に正しいテンプレートが生成されていることを確認
+    [[ "$content" == *"XDG_CONFIG_HOME"* ]]
+    [[ "$content" != "old" ]]
 }
 
 # =============================================================================

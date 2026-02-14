@@ -114,6 +114,8 @@ opencode --version
 
 > **Note**: IGNITE uses OpenCode as the default CLI provider. To use Claude Code as an alternative, install it with `npm install -g @anthropic-ai/claude-code` and set `cli.provider` to `claude` in `config/system.yaml`.
 
+> **To use Ollama (local LLM)**: Start `ollama serve` inside WSL2 and set `cli.model` to `ollama/qwen3-coder:30b` (or similar) in `config/system.yaml`. No API key required. See [Ollama documentation](https://docs.ollama.com/integrations/opencode) for details.
+
 ## 5. Install and Run IGNITE
 
 ```bash

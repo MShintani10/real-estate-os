@@ -114,6 +114,8 @@ opencode --version
 
 > **Note**: IGNITE のデフォルト CLI プロバイダーは OpenCode です。Claude Code を代替として使用する場合は、`npm install -g @anthropic-ai/claude-code` でインストールし、`config/system.yaml` の `cli.provider` を `claude` に変更してください。
 
+> **Ollama（ローカルLLM）を使う場合**: WSL2 内で `ollama serve` を起動し、`config/system.yaml` の `cli.model` を `ollama/qwen3-coder:30b` 等に設定してください。API Key は不要です。詳細は [Ollama 公式ドキュメント](https://docs.ollama.com/integrations/opencode) を参照。
+
 ## 5. IGNITE のインストールと起動
 
 ```bash

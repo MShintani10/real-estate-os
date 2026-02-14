@@ -209,6 +209,27 @@ cli_setup_project_config() {
                 instructions_json+="]"
             fi
 
+            # Ollama プロバイダー設定を構築（model が ollama/ で始まる場合）
+            local provider_json=""
+            if [[ "$CLI_MODEL" == ollama/* ]]; then
+                local ollama_url="${OLLAMA_API_URL:-http://localhost:11434/v1}"
+                local ollama_model="${CLI_MODEL#ollama/}"
+                provider_json=',
+  "provider": {
+    "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "'"$ollama_url"'"
+      },
+      "models": {
+        "'"$ollama_model"'": {
+          "tools": true
+        }
+      }
+    }
+  }'
+            fi
+
             # OpenCode 設定を生成（https://opencode.ai/docs/config/ 準拠）
             # permission: {"*": "allow"} で全ツールを自動承認（Claude の --dangerously-skip-permissions 相当）
             cat > "$config_file" <<OCEOF
@@ -216,7 +237,7 @@ cli_setup_project_config() {
   "\$schema": "https://opencode.ai/config.json",
   "model": "$CLI_MODEL",
   "permission": {"*": "allow"},
-  "instructions": $instructions_json
+  "instructions": $instructions_json${provider_json}
 }
 OCEOF
             log_info "opencode.json を生成しました: $config_file"

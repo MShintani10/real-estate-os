@@ -11,6 +11,13 @@
 #   cli:
 #     provider: opencode
 #     model: anthropic/claude-sonnet-4-5-20250929
+#
+# Ollama（ローカルLLM）の場合:
+#   事前に ollama serve を起動し、モデルを pull しておくこと
+#   API Key は不要。OLLAMA_API_URL で接続先を変更可能（デフォルト: http://localhost:11434/v1）
+#   cli:
+#     provider: opencode
+#     model: ollama/qwen3-coder:30b
 
 cli:
   provider: opencode

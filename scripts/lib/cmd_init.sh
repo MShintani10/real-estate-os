@@ -135,6 +135,12 @@ GITIGNORE
 # OPENAI_API_KEY=sk-...
 # ANTHROPIC_API_KEY=sk-ant-...
 
+# --- Ollama（ローカルLLM使用時） ---
+# system.yaml で model: ollama/<model> を指定すると自動的に Ollama に接続します
+# 事前に ollama serve を起動し、モデルを pull しておくこと（API Key は不要）
+# デフォルト接続先: http://localhost:11434/v1（変更する場合のみ設定）
+# OLLAMA_API_URL=http://localhost:11434/v1
+
 # --- GitHub Token (GitHub App 未使用時のフォールバック) ---
 # GH_TOKEN=ghp_...
 ENVEOF

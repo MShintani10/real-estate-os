@@ -2,7 +2,7 @@
 
 ## システム概要
 
-IGNITEは、claude code CLIを活用した階層型マルチエージェントシステムです。Leader、5つの専門Sub-Leaders、および可変数のIGNITIANSワーカーが協調して、複雑なタスクを並列実行します。
+IGNITEは、AI Coding Agent CLIを活用した階層型マルチエージェントシステムです。Leader、5つの専門Sub-Leaders、および可変数のIGNITIANSワーカーが協調して、複雑なタスクを並列実行します。
 
 ## アーキテクチャ構成
 
@@ -227,7 +227,7 @@ Session `ignite-session` の単一ウィンドウ内に、全ペインが `tiled
 
 ### エージェント起動
 
-各ペインでclaude code CLIが起動:
+各ペインでCLI Agentが起動:
 ```bash
 claude-code --dangerously-skip-permissions
 ```
@@ -263,7 +263,7 @@ claude-code --dangerously-skip-permissions
 
 5. **IGNITIANSが並列実行**
    - タスクを読み取り
-   - claude codeツールで実行
+   - CLIツールで実行
    - 完了レポートを作成
 
 6. **Evaluatorが評価**
@@ -485,7 +485,7 @@ sequenceDiagram
 ## セキュリティ考慮事項
 
 ### ローカルPC権限
-- claude codeは`--dangerously-skip-permissions`で起動
+- CLIエージェントはパーミッション自動承認モードで起動
 - ローカルPCの全権限を持つ
 - 信頼できるタスクのみを実行
 

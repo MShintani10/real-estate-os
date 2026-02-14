@@ -4,7 +4,7 @@
   <img src="images/ignite-logo.jpg" width="200">
 </p>
 
-**IGNITE (Intelligent Generative Networked Interaction-driven Task Engine)** は、claude code CLIを活用した階層型マルチエージェントシステムです。Leader、5つの専門Sub-Leaders、および可変数のIGNITIANSワーカーが協調して、複雑なタスクを並列実行します。<br>
+**IGNITE (Intelligent Generative Networked Interaction-driven Task Engine)** は、AI Coding Agent CLIを活用した階層型マルチエージェントシステムです。Leader、5つの専門Sub-Leaders、および可変数のIGNITIANSワーカーが協調して、複雑なタスクを並列実行します。<br>
 IGNITEは今はまだ歌って踊ってライブ配信することはできませんが、いつか皆さんの前で素敵なステージを見せることができるよう日々努力を重ねています。
 
 <p align="center">

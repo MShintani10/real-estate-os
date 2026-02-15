@@ -343,11 +343,11 @@ EOF
 # cli_get_env_vars
 # =============================================================================
 
-@test "cli_get_env_vars: opencode（デフォルト）は OPENCODE_CONFIG を含む" {
+@test "cli_get_env_vars: opencode（デフォルト）は何も出力しない" {
     cli_load_config
     local vars
     vars=$(cli_get_env_vars)
-    [[ "$vars" == *"OPENCODE_CONFIG=.ignite/opencode.json"* ]]
+    [[ -z "$vars" ]]
 }
 
 @test "cli_get_env_vars: claude は AGENT_TEAMS を含む" {
@@ -364,7 +364,7 @@ EOF
     [[ "$vars" == *"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1"* ]]
 }
 
-@test "cli_get_env_vars: opencode は OPENCODE_CONFIG のみ（API Key は .env から読み込み）" {
+@test "cli_get_env_vars: opencode は API Key を出力しない" {
     cat > "$IGNITE_CONFIG_DIR/system.yaml" <<'EOF'
 cli:
   provider: opencode
@@ -373,9 +373,7 @@ EOF
     cli_load_config
     local vars
     vars=$(cli_get_env_vars)
-    [[ "$vars" == *"OPENCODE_CONFIG=.ignite/opencode.json"* ]]
-    [[ "$vars" != *"OPENAI_API_KEY"* ]]
-    [[ "$vars" != *"ANTHROPIC_API_KEY"* ]]
+    [[ -z "$vars" ]]
 }
 
 # =============================================================================

@@ -75,8 +75,7 @@ cp config/github-watcher.yaml.example /path/to/workspace/.ignite/github-watcher.
 |---|---|---|
 | 1（最高） | 環境変数 | `IGNITE_WATCHER_CONFIG` |
 | 2 | ワークスペース固有 | `<workspace>/.ignite/github-watcher.yaml` |
-| 3 | ユーザーデフォルト | `~/.ignite/github-watcher.yaml` |
-| 4（最低） | プロジェクトデフォルト | `config/github-watcher.yaml` |
+| 3（最低） | プロジェクトデフォルト | `config/github-watcher.yaml` |
 
 **ワークスペース指定での起動:**
 

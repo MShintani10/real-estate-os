@@ -12,14 +12,9 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # 設定ディレクトリ解決:
 # 1. 環境変数 IGNITE_CONFIG_DIR が設定済みならそのまま使用
-# 2. HOME/.ignite があればそちらを優先
-# 3. フォールバック: PROJECT_ROOT/config（テンプレート）
+# 2. フォールバック: PROJECT_ROOT/config
 if [[ -z "${IGNITE_CONFIG_DIR:-}" ]]; then
-    if [[ -d "${HOME}/.ignite" ]]; then
-        IGNITE_CONFIG_DIR="${HOME}/.ignite"
-    else
-        IGNITE_CONFIG_DIR="$PROJECT_ROOT/config"
-    fi
+    IGNITE_CONFIG_DIR="$PROJECT_ROOT/config"
 fi
 IGNITE_DATA_DIR="$PROJECT_ROOT"
 IGNITE_INSTRUCTIONS_DIR="$PROJECT_ROOT/instructions"

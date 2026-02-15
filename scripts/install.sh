@@ -44,8 +44,8 @@ print_header() { echo -e "${BOLD}=== $1 ===${NC}"; }
 # =============================================================================
 
 BIN_DIR="${IGNITE_BIN_DIR:-${XDG_BIN_HOME:-$HOME/.local/bin}}"
-CONFIG_DIR="${IGNITE_CONFIG_DIR:-$HOME/.ignite}"
 DATA_DIR="${IGNITE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/ignite}"
+CONFIG_DIR="${IGNITE_CONFIG_DIR:-$DATA_DIR/config}"
 
 # インストールモードフラグ
 FORCE=false
@@ -64,7 +64,7 @@ IGNITE インストーラー v${VERSION}
 
 オプション:
   --bin-dir <path>     実行ファイルのインストール先 (デフォルト: ~/.local/bin)
-  --config-dir <path>  設定ファイルのインストール先 (デフォルト: ~/.ignite)
+  --config-dir <path>  設定ファイルのインストール先 (デフォルト: ~/.local/share/ignite/config)
   --data-dir <path>    データファイルのインストール先 (デフォルト: ~/.local/share/ignite)
   --upgrade            アップグレードモード (バイナリ・データは上書き、設定は保持)
   --force              既存ファイルをすべて上書き
@@ -75,7 +75,6 @@ IGNITE インストーラー v${VERSION}
   IGNITE_CONFIG_DIR    設定ファイルのインストール先
   IGNITE_DATA_DIR      データファイルのインストール先
   XDG_BIN_HOME         XDG準拠の実行ファイルディレクトリ
-  XDG_CONFIG_HOME      XDG準拠の設定ディレクトリ
   XDG_DATA_HOME        XDG準拠のデータディレクトリ
 
 例:
@@ -387,7 +386,7 @@ check_path() {
 
 write_config_paths() {
     # インストールパスを記録（ignite が参照するため）
-    cat > "$CONFIG_DIR/.install_paths" << EOF
+    cat > "$DATA_DIR/.install_paths" << EOF
 # IGNITE インストールパス (自動生成)
 BIN_DIR="$BIN_DIR"
 CONFIG_DIR="$CONFIG_DIR"

@@ -327,7 +327,8 @@ _service_logs() {
 # =============================================================================
 
 _service_setup_env() {
-    local env_file="${IGNITE_CONFIG_DIR}/env"
+    local _env_dir="${XDG_CONFIG_HOME:-$HOME/.config}/ignite"
+    local env_file="${_env_dir}/env"
     local force=false
 
     # オプション解析
@@ -338,7 +339,7 @@ _service_setup_env() {
         esac
     done
 
-    mkdir -p "${IGNITE_CONFIG_DIR}"
+    mkdir -p "${_env_dir}"
 
     if [[ -f "$env_file" ]] && [[ "$force" != true ]]; then
         print_warning "既に $env_file が存在します"

@@ -229,8 +229,7 @@ By default, IGNITE is installed to the following locations:
 | Path | Description |
 |------|-------------|
 | `~/.local/bin/` | Executable (`ignite` command) |
-| `~/.config/ignite/` | Configuration files |
-| `~/.local/share/ignite/` | Data files (instructions, scripts) |
+| `~/.local/share/ignite/` | Data & configuration files (config, instructions, scripts) |
 
 ### PATH Configuration
 

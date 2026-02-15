@@ -237,8 +237,7 @@ tar xzf ignite-*.tar.gz
 
 インストール先：
 - `~/.local/bin/` — 実行ファイル (`ignite` コマンド)
-- `~/.config/ignite/` — 設定ファイル
-- `~/.local/share/ignite/` — データファイル（instructions、scripts等）
+- `~/.local/share/ignite/` — データ・設定ファイル（config、instructions、scripts等）
 
 > **Note**: `~/.local/bin` が PATH に含まれていない場合は、以下を `~/.bashrc` または `~/.zshrc` に追加してください：
 > ```bash

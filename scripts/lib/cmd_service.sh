@@ -383,12 +383,15 @@ _service_setup_env() {
         read -p "ワークスペースパスを入力してください: " -r _workspace_dir
     fi
 
+    # 現在の PATH をキャプチャ（systemd 環境では PATH が最小限のため）
+    local _current_path="${PATH}"
+
     # 最小テンプレート生成
     cat > "$env_file" <<ENVEOF
 # IGNITE - systemd EnvironmentFile
 # chmod 600 ${env_file}
 
-PATH=${HOME}/.local/bin:/usr/local/bin:/usr/bin:/bin
+PATH=${_current_path}
 HOME=${HOME}
 TERM=xterm-256color
 

@@ -282,8 +282,7 @@ cli_get_env_vars() {
             echo "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1"
             ;;
         opencode)
-            echo "OPENCODE_CONFIG=.ignite/opencode.json"
-            # API Key は .ignite/.env から読み込み（cli_get_env_vars では出力しない）
+            # OPENCODE_CONFIG はロール別に各 tmux ペインで設定されるため出力しない
             ;;
     esac
 }

@@ -492,8 +492,8 @@ privateリポジトリにアクセスする場合、GitHub Appトークンを使
 # トークン取得（リポジトリを指定）
 BOT_TOKEN=$(./scripts/utils/get_github_app_token.sh --repo {repository})
 
-# clone（GitHub Appトークン使用）
-GH_TOKEN="$BOT_TOKEN" gh repo clone {repository} {target_path}
+# clone（setup_repo.sh 使用）
+./scripts/utils/setup_repo.sh clone {repository}
 ```
 
 **注意:** GitHub Appにリポジトリへのアクセス権限が必要です。
@@ -560,7 +560,8 @@ PRコメントで修正依頼が来た場合：
    ./scripts/utils/update_pr.sh abort "$REPO_PATH"
 
    # 2. 現在のPRを閉じる
-   gh pr close {pr_number} --repo {repository} --comment "コンフリクト解決不可のため新規PRで対応します"
+   ./scripts/utils/comment_on_issue.sh {pr_number} --repo {repository} --bot --body "コンフリクト解決不可のため新規PRで対応します"
+   # PR を PATCH API でクローズ（github_helpers.sh の関数を使用）
 
    # 3. ブランチを削除して新規作成
    git branch -D ignite/issue-{issue_number}
@@ -635,7 +636,7 @@ PRコメントで修正依頼が来た場合：
    a. 各エントリのリンク表記ルール:
       - 起票先が trigger_source.repository と同じ → `#42 — タイトル`
       - 起票先が異なるリポ:
-        - `gh repo view {repo} --json isPrivate -q '.isPrivate'` で可視性確認
+        - `github_api_get "$repo" "/repos/{repo}" | jq -r '.private'` で可視性確認
         - false（public）→ `owner/repo#42 — タイトル`
         - true（private）→ 「プライベートリポジトリにN件起票済み」（名前・タイトル伏せ）
 
@@ -686,8 +687,8 @@ payload:
    - 起票先 == trigger_source.repository → `#42 — タイトル`（同一リポ内リンク）
    - 起票先 != trigger_source.repository かつ public → `owner/repo#42 — タイトル`
    - 起票先 != trigger_source.repository かつ private → 「プライベートリポジトリにN件起票済み」（リポ名・タイトルを伏せる）
-   - 可視性確認: `gh repo view {repo} --json isPrivate -q '.isPrivate'`
-3. 組み立てた本文を一時ファイルに書き出し、`--body-file` で投稿
+   - 可視性確認: `github_api_get "$repo" "/repos/{repo}" | jq -r '.private'`
+3. 組み立てた本文を一時ファイルに書き出し、`comment_on_issue.sh --body-file` で投稿
 4. ダッシュボードに記録
 
 ### review トリガー処理
@@ -696,7 +697,8 @@ PRに対して `@ignite-gh-app review` が来た場合：
 
 1. **PRの差分を取得**
    ```bash
-   gh pr diff {pr_number} --repo {repository}
+   github_api_get "{repository}" "/repos/{repository}/pulls/{pr_number}" | jq -r '.diff_url'
+   # または git diff で取得
    ```
 
 2. **IGNITIANsにレビューと説明を依頼**
@@ -859,7 +861,7 @@ Coordinator（IGNITIAN経由）または Sub-Leaders から issue_proposal を�
 
    | 判断 | 条件 | アクション |
    |------|------|-----------|
-   | **Issue 起票** | 新規の問題で再現性あり | `gh issue create` で起票（Bot名義） |
+   | **Issue 起票** | 新規の問題で再現性あり | `github_api_post` で起票（Bot名義） |
    | **既存 Issue に追記** | 類似 Issue が既にオープン | 該当 Issue にコメント追記（Bot名義） |
    | **却下** | 根拠不足 / 仕様通り / 重複 | 理由を付けて却下 |
 

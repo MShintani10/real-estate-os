@@ -380,14 +380,14 @@ EOF
 # cli_get_required_commands
 # =============================================================================
 
-@test "cli_get_required_commands: opencode（デフォルト）は 'tmux opencode gh'" {
+@test "cli_get_required_commands: opencode（デフォルト）は 'tmux opencode'" {
     cli_load_config
     local cmds
     cmds=$(cli_get_required_commands)
-    [[ "$cmds" == "tmux opencode gh" ]]
+    [[ "$cmds" == "tmux opencode" ]]
 }
 
-@test "cli_get_required_commands: claude は 'tmux claude gh'" {
+@test "cli_get_required_commands: claude は 'tmux claude'" {
     cat > "$IGNITE_CONFIG_DIR/system.yaml" <<'EOF'
 cli:
   provider: claude
@@ -398,10 +398,10 @@ EOF
     cli_load_config
     local cmds
     cmds=$(cli_get_required_commands)
-    [[ "$cmds" == "tmux claude gh" ]]
+    [[ "$cmds" == "tmux claude" ]]
 }
 
-@test "cli_get_required_commands: opencode は 'tmux opencode gh'" {
+@test "cli_get_required_commands: opencode は 'tmux opencode'" {
     cat > "$IGNITE_CONFIG_DIR/system.yaml" <<'EOF'
 cli:
   provider: opencode
@@ -410,5 +410,5 @@ EOF
     cli_load_config
     local cmds
     cmds=$(cli_get_required_commands)
-    [[ "$cmds" == "tmux opencode gh" ]]
+    [[ "$cmds" == "tmux opencode" ]]
 }

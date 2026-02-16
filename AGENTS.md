@@ -27,8 +27,9 @@ docs/                 # ドキュメント
 
 ### 依存関係
 
-- **必須**: tmux, opencode (または claude), gh
+- **必須**: tmux, opencode (または claude)
 - **任意**: yq (v4.30+), sqlite3, python3
+- **不要（撤廃済み）**: gh CLI — GitHub API 呼び出しは `scripts/utils/github_helpers.sh` の関数を使用
 
 ### テスト
 
@@ -66,8 +67,24 @@ systemd サービスの起動テストや queue_monitor のプログレス表示
   - 英語版: `docs/<name>_en.md`
 - 例: `docs/startup-parallelization.md` / `docs/startup-parallelization_en.md`
 
+## セルフチェックルール
+
+コード変更後は**最低3回**のセルフチェックを行うこと:
+
+1. **1回目**: 変更対象の直接的な修正漏れを `grep` で検索（狭いパターン）
+2. **2回目**: 関連する間接的な参照を広いパターンで検索（instructions/, config/, tests/ 含む）
+3. **3回目**: さらに広いパターン（単語単位）で全体を横断検索し、見落としがないか確認
+
+特にリネーム・削除・依存関係の変更時は、以下を必ず確認すること:
+- `scripts/` 内の実行コード
+- `instructions/` 内のエージェント向けプロンプト
+- `config/` 内の設定ファイル・テンプレート
+- `tests/` 内のテストコード
+- `install.sh` や `cli_provider.sh` の依存関係リスト
+
 ## 重要な注意事項
 
 - デフォルト CLI プロバイダーは **OpenCode** です（`config/system.yaml` の `cli.provider`）
 - 設定ファイルの読み込みは `scripts/lib/yaml_utils.sh` の関数を使用してください
 - セキュリティ: ユーザー入力は必ず `sanitize_*` 関数でサニタイズすること
+- **gh CLI は使用禁止**: GitHub API 操作は `github_helpers.sh` の `github_api_get`/`github_api_post`/`github_api_request`/`github_api_paginate` を使用すること

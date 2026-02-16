@@ -443,7 +443,7 @@ Leaderから `memory_review_request` を受信した場合、以下の手順で�
 - 通常のフォーマット（「根拠となるメモリ」テーブル含む）を使用してよい
 - リポのアクセス権を持つメンバーのみが閲覧できるため
 
-起票先の可視性は `gh repo view {repo} --json isPrivate -q '.isPrivate'` で確認する。
+起票先の可視性は `github_api_get "$repo" "/repos/{repo}" | jq -r '.private'` で確認する。
 
 #### メモリ0件の場合
 
@@ -768,7 +768,7 @@ payload:
   issue_number: {ISSUE_NUMBER}
 ```
 
-**注意**: bare `gh` コマンドで直接 Issue を起票しない — 必ず Leader 経由で提案する（`memory_insights.sh` 経由の起票は除く）。
+**注意**: GitHub API を直接呼び出して Issue を起票しない — 必ず Leader 経由で提案する（`memory_insights.sh` 経由の起票は除く）。
 
 ## ログ記録
 

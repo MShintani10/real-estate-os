@@ -277,7 +277,7 @@ _get_bot_token_internal() {
         [[ -z "$last_error" ]] && last_error="$token"
         case $exit_code in
             64) log_warn "Bot Token: 引数エラー (EX_USAGE)"; break ;;
-            69) log_warn "Bot Token: gh CLI/gh-token未インストール (EX_UNAVAILABLE)"; break ;;
+            69) log_warn "Bot Token: gh-token未インストール (EX_UNAVAILABLE)"; break ;;
             78) log_warn "Bot Token: 設定ファイルエラー (EX_CONFIG)"; break ;;
             77) log_warn "Bot Token: 権限エラー (EX_NOPERM)"; break ;;
             73) log_warn "Bot Token: トークン生成失敗 (EX_CANTCREAT)" ;;

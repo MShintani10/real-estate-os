@@ -172,9 +172,7 @@ _is_duplicate_comment() {
         _print_auth_error "$repo"
         return 1
     fi
-    comments_json=$(GH_TOKEN="$auth_token" gh api \
-        "/repos/${repo}/issues/${issue_number}/comments" \
-        --paginate 2>/dev/null) || true
+    comments_json=$(github_api_paginate "$repo" "/repos/${repo}/issues/${issue_number}/comments" 2>/dev/null) || true
 
     if [[ -z "$comments_json" ]]; then
         log_warn "コメント一覧取得失敗。重複チェックをスキップして投稿を続行します。"
@@ -182,10 +180,9 @@ _is_duplicate_comment() {
     fi
 
     # jqで各コメントbodyをtrimして比較
-    # --slurp: gh api --paginateが複数ページ返す場合の連結JSON配列を単一配列に統合
     local match
-    match=$(printf '%s' "$comments_json" | jq --slurp --arg new_body "$trimmed_body" '
-        [.[][] | .body | gsub("^\\s+|\\s+$"; "")] | any(. == $new_body)
+    match=$(printf '%s' "$comments_json" | jq --arg new_body "$trimmed_body" '
+        [.[] | .body | gsub("^\\s+|\\s+$"; "")] | any(. == $new_body)
     ' 2>/dev/null) || true
 
     if [[ "$match" == "true" ]]; then
@@ -218,7 +215,9 @@ post_comment() {
     fi
 
     log_info "コメントを投稿中..."
-    GH_TOKEN="$auth_token" gh api "/repos/${repo}/issues/${issue_number}/comments" -f body="$body" --silent
+    local json_body
+    json_body=$(jq -n --arg body "$body" '{"body": $body}')
+    github_api_post "$repo" "/repos/${repo}/issues/${issue_number}/comments" "$json_body" > /dev/null
 }
 
 # =============================================================================
@@ -291,15 +290,9 @@ main() {
         exit 1
     fi
 
-    # リポジトリ推測
+    # リポジトリ推測（git remote から検出）
     if [[ -z "$repo" ]]; then
-        local repo_token=""
-        repo_token=$(get_auth_token "") || true
-        if [[ -z "$repo_token" ]]; then
-            _print_auth_error ""
-            exit 1
-        fi
-        repo=$(GH_TOKEN="$repo_token" gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null || echo "")
+        repo=$(_get_repo_from_remote 2>/dev/null || echo "")
         if [[ -z "$repo" ]]; then
             log_error "リポジトリを指定してください: --repo owner/repo"
             exit 1

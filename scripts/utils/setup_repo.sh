@@ -88,7 +88,17 @@ EOF
 # リポジトリのデフォルトブランチを取得
 get_default_branch() {
     local repo="$1"
-    gh api "/repos/${repo}" --jq '.default_branch' 2>/dev/null || echo "main"
+    local response
+    response=$(github_api_get "$repo" "/repos/${repo}" 2>/dev/null) || true
+    if [[ -n "$response" ]]; then
+        local branch
+        branch=$(printf '%s' "$response" | _json_get '.default_branch')
+        if [[ -n "$branch" && "$branch" != "null" ]]; then
+            echo "$branch"
+            return 0
+        fi
+    fi
+    echo "main"
 }
 
 # 設定ファイルからベースブランチを取得（なければデフォルトブランチ）
@@ -208,7 +218,14 @@ setup_repo() {
             if [[ "$AUTH_TOKEN_SOURCE" == "pat" ]]; then
                 log_warn "GitHub App Token取得失敗のため、PATでcloneします。"
             fi
-            GH_TOKEN="$auth_token" gh repo clone "$repo" "$repo_path" -- --branch "$branch"
+            local clone_url
+            clone_url="$(get_github_base_url)/${repo}.git"
+            local basic
+            basic=$(_build_basic_auth "$auth_token")
+            local host
+            host=$(get_github_hostname)
+            git -c "http.https://${host}/.extraHeader=Authorization: Basic ${basic}" \
+                clone --branch "$branch" "$clone_url" "$repo_path"
         fi
         cd "$repo_path"
     fi

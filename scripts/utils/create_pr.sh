@@ -89,7 +89,7 @@ get_issue_info() {
     local repo="$1"
     local issue_number="$2"
 
-    _gh_api "$repo" api "/repos/${repo}/issues/${issue_number}" 2>/dev/null
+    github_api_get "$repo" "/repos/${repo}/issues/${issue_number}" 2>/dev/null
 }
 
 # =============================================================================
@@ -204,21 +204,21 @@ create_pull_request() {
         log_warn "GitHub App Token取得失敗のため、PATでPRを作成します。"
     fi
 
-    # PR作成
+    # PR作成（curl + GitHub API）
+    local json_data
+    json_data=$(jq -n \
+        --arg title "$title" \
+        --arg body "$body" \
+        --arg head "$head_branch" \
+        --arg base "$base_branch" \
+        --argjson draft "$( [[ "$is_draft" == "true" ]] && echo true || echo false )" \
+        '{"title": $title, "body": $body, "head": $head, "base": $base, "draft": $draft}')
+
+    local pr_response
+    pr_response=$(github_api_post "$repo" "/repos/${repo}/pulls" "$json_data")
+
     local pr_url
-    local -a gh_args=(
-        --repo "$repo"
-        --title "$title"
-        --body "$body"
-        --base "$base_branch"
-        --head "$head_branch"
-    )
-    if [[ "$is_draft" == "true" ]]; then
-        gh_args+=(--draft)
-    fi
-
-    pr_url=$(GH_TOKEN="$auth_token" gh pr create "${gh_args[@]}")
-
+    pr_url=$(printf '%s' "$pr_response" | _json_get '.html_url')
     echo "$pr_url"
 }
 
@@ -306,14 +306,8 @@ main() {
     else
         ISSUE_NUMBER="$issue_input"
         if [[ -z "$repo" ]]; then
-            # リポジトリを推測
-            local repo_token=""
-            repo_token=$(get_auth_token "") || true
-            if [[ -z "$repo_token" ]]; then
-                _print_auth_error ""
-                exit 1
-            fi
-            repo=$(GH_TOKEN="$repo_token" gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null || echo "")
+            # リポジトリを推測（git remote から検出）
+            repo=$(_get_repo_from_remote 2>/dev/null || echo "")
             if [[ -z "$repo" ]]; then
                 log_error "リポジトリを指定してください: --repo owner/repo"
                 exit 1
@@ -411,7 +405,7 @@ ${issue_body_truncated}
         echo ""
         echo "プッシュとPR作成は手動で行ってください:"
         echo "  git push -u origin $branch_name"
-        echo "  gh pr create --repo $REPO --base $base_branch"
+        echo "  ./scripts/utils/create_pr.sh $ISSUE_NUMBER --repo $REPO --base $base_branch"
         echo ""
     fi
 }

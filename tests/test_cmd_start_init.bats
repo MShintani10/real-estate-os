@@ -7,6 +7,31 @@
 
 load 'test_helper'
 
+run_with_pty() {
+    local cmd="$1"
+    python3 - "$cmd" <<'PY'
+import os, pty, subprocess, sys
+cmd = sys.argv[1]
+env = os.environ.copy()
+master, slave = pty.openpty()
+proc = subprocess.Popen(cmd, shell=True, stdout=slave, stderr=slave, env=env)
+os.close(slave)
+chunks = []
+try:
+    while True:
+        data = os.read(master, 4096)
+        if not data:
+            break
+        chunks.append(data)
+except OSError:
+    pass
+os.close(master)
+proc.wait()
+sys.stdout.buffer.write(b"".join(chunks))
+sys.exit(proc.returncode)
+PY
+}
+
 setup() {
     setup_temp_dir
 
@@ -107,6 +132,34 @@ teardown() {
 
     # dry-runではtmuxセッション名が出力に含まれないこと確認
     [[ "$output" != *"tmuxセッションを作成中"* ]]
+}
+
+@test "dry-run: 通常(PTY) はカラー出力が含まれる" {
+    local cmd
+    cmd="$PROJECT_ROOT/scripts/ignite start --dry-run --skip-validation -n -w $TEST_WORKSPACE"
+    run run_with_pty "$cmd"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *$'\x1b['* ]]
+}
+
+@test "dry-run: 非対話環境ではカラー出力が含まれない" {
+    run "$PROJECT_ROOT/scripts/ignite" start --dry-run --skip-validation -n -w "$TEST_WORKSPACE"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *$'\x1b['* ]]
+}
+
+@test "dry-run: NO_COLOR ではカラー出力が含まれない" {
+    local cmd
+    cmd="NO_COLOR=1 $PROJECT_ROOT/scripts/ignite start --dry-run --skip-validation -n -w $TEST_WORKSPACE"
+    run run_with_pty "$cmd"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *$'\x1b['* ]]
+}
+
+@test "dry-run: 最終サマリが出力される" {
+    run "$PROJECT_ROOT/scripts/ignite" start --dry-run --skip-validation -n -w "$TEST_WORKSPACE"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"[DRY-RUN] 初期化検証完了"* ]]
 }
 
 @test "dry-run: Phase 1-5 が実行済みであること（出力メッセージ確認）" {

@@ -107,6 +107,9 @@ WORKSPACE_DIR="${WORKSPACE_DIR:-$PROJECT_ROOT/workspace}"
 IGNITE_RUNTIME_DIR="${IGNITE_RUNTIME_DIR:-$WORKSPACE_DIR}"
 POLL_INTERVAL="${QUEUE_POLL_INTERVAL:-10}"
 TMUX_SESSION="${IGNITE_TMUX_SESSION:-}"
+PROGRESS_MAX_CHARS="${QUEUE_PROGRESS_MAX_CHARS:-400}"
+PROGRESS_MAX_LINES="${QUEUE_PROGRESS_MAX_LINES:-4}"
+PROGRESS_LATEST_FILE="${IGNITE_RUNTIME_DIR}/state/progress_update_latest.txt"
 
 # CLI プロバイダー設定を読み込み（submit keys 判定に必要）
 cli_load_config 2>/dev/null || true
@@ -266,6 +269,73 @@ _trigger_daily_report() {
     }
 }
 
+# =============================================================================
+# progress_update 整形/出力
+# =============================================================================
+
+_sanitize_progress_text() {
+    local input="$1"
+    printf '%s' "$input" | tr -d '\000-\011\013\014\016-\037\177'
+}
+
+_truncate_progress_text() {
+    local input="$1"
+    local max_chars="$2"
+    if [[ -z "$max_chars" ]] || [[ "$max_chars" -lt 1 ]]; then
+        printf '%s' "$input"
+        return
+    fi
+    printf '%s' "$input" | awk -v max="$max_chars" '{
+        if (length($0) <= max) { print $0; next }
+        print substr($0, 1, max-3) "..."
+    }'
+}
+
+_format_progress_update() {
+    local summary="$1"
+    local tasks_completed="$2"
+    local tasks_total="$3"
+    local issue_id="$4"
+    local msg_repo="$5"
+
+    summary="${summary:-N/A}"
+    tasks_completed="${tasks_completed:-?}"
+    tasks_total="${tasks_total:-?}"
+    issue_id="${issue_id:-?}"
+    msg_repo="${msg_repo:-N/A}"
+
+    summary=$(_sanitize_progress_text "$summary")
+
+    cat <<EOF
+Progress Update
+- Repository: ${msg_repo}
+- Issue: ${issue_id}
+- Tasks: ${tasks_completed}/${tasks_total}
+- Summary: ${summary}
+- Time: $(date '+%Y-%m-%d %H:%M:%S %Z')
+EOF
+}
+
+_emit_progress_update() {
+    local formatted="$1"
+    local summary_line="$2"
+
+    if [[ -t 1 || -t 2 ]]; then
+        log_info "progress_update 受信"
+        printf '%s\n' "$formatted" >&2
+    else
+        local compact
+        compact=$(_truncate_progress_text "$summary_line" "$PROGRESS_MAX_CHARS")
+        log_info "$compact"
+    fi
+}
+
+_persist_progress_update() {
+    local formatted="$1"
+    mkdir -p "$(dirname "$PROGRESS_LATEST_FILE")"
+    printf '%s\n' "$formatted" > "$PROGRESS_LATEST_FILE"
+}
+
 _report_progress() {
     local file="$1"
 
@@ -274,18 +344,29 @@ _report_progress() {
         return 0
     fi
 
-    # progress_update から情報を抽出
+    # progress_update から情報を抽出（ボディはインデントなし/ありの両方に対応）
     local summary
-    summary=$(grep -E '^\s+summary:' "$file" | head -1 | sed 's/^.*summary: *//; s/^"//; s/"$//')
+    summary=$(grep -E '^\s*summary:' "$file" | head -1 | sed 's/^.*summary: *//; s/^"//; s/"$//')
     local tasks_completed
-    tasks_completed=$(grep -E '^\s+tasks_completed:' "$file" | head -1 | awk '{print $2}')
+    tasks_completed=$(grep -E '^\s*completed:' "$file" | head -1 | awk '{print $2}')
     local tasks_total
-    tasks_total=$(grep -E '^\s+tasks_total:' "$file" | head -1 | awk '{print $2}')
+    tasks_total=$(grep -E '^\s*total_tasks:' "$file" | head -1 | awk '{print $2}')
     local issue_id
-    issue_id=$(grep -E '^\s+issue_id:' "$file" | head -1 | awk '{print $2}' | tr -d '"')
+    issue_id=$(grep -E '^\s*issue:' "$file" | head -1 | awk '{print $2}' | tr -d '"')
     # repository フィールドを抽出（あれば per-repo フィルタ）
+    # ヘッダーの X-IGNITE-Repository とは区別される（^repository: でマッチ）
     local msg_repo
-    msg_repo=$(grep -E '^\s+repository:' "$file" | head -1 | awk '{print $2}' | tr -d '"')
+    msg_repo=$(grep -E '^\s*repository:' "$file" | head -1 | awk '{print $2}' | tr -d '"')
+
+    local formatted
+    formatted=$(_format_progress_update "$summary" "$tasks_completed" "$tasks_total" "$issue_id" "$msg_repo")
+    _persist_progress_update "$formatted"
+
+    local summary_line_text
+    summary_line_text=$(printf '%s' "${summary:-N/A}" | tr '\n' ' ')
+    local progress_msg
+    progress_msg=$(format_progress_message "${summary:-working}" "${tasks_completed:-0}" "${summary_line_text}")
+    _emit_progress_update "$formatted" "$progress_msg"
 
     local cache_dir
     cache_dir=$(_get_report_cache_dir)
@@ -302,11 +383,14 @@ _report_progress() {
     local repos="$msg_repo"
 
     local comment_body
+    local summary_clean
+    summary_clean=$(printf '%s' "${summary:-N/A}" | tr '\n' ' ')
+    summary_clean=$(_truncate_progress_text "$summary_clean" "$PROGRESS_MAX_CHARS")
     comment_body="### Progress Update
 
 - **Issue:** ${issue_id}
 - **Tasks:** ${tasks_completed:-?}/${tasks_total:-?} completed
-- **Summary:** ${summary:-N/A}
+- **Summary:** ${summary_clean:-N/A}
 - **Time:** $(date '+%Y-%m-%d %H:%M:%S %Z')"
 
     while IFS= read -r repo; do

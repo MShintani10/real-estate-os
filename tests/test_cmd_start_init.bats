@@ -109,6 +109,34 @@ teardown() {
     [[ "$output" != *"tmuxセッションを作成中"* ]]
 }
 
+@test "dry-run: 通常(PTY) はカラー出力が含まれる" {
+    local cmd
+    cmd="$PROJECT_ROOT/scripts/ignite start --dry-run --skip-validation -n -w $TEST_WORKSPACE"
+    run run_with_pty "$cmd"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *$'\x1b['* ]]
+}
+
+@test "dry-run: 非対話環境ではカラー出力が含まれない" {
+    run "$PROJECT_ROOT/scripts/ignite" start --dry-run --skip-validation -n -w "$TEST_WORKSPACE"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *$'\x1b['* ]]
+}
+
+@test "dry-run: NO_COLOR ではカラー出力が含まれない" {
+    local cmd
+    cmd="NO_COLOR=1 $PROJECT_ROOT/scripts/ignite start --dry-run --skip-validation -n -w $TEST_WORKSPACE"
+    run run_with_pty "$cmd"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *$'\x1b['* ]]
+}
+
+@test "dry-run: 最終サマリが出力される" {
+    run "$PROJECT_ROOT/scripts/ignite" start --dry-run --skip-validation -n -w "$TEST_WORKSPACE"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"[DRY-RUN] 初期化検証完了"* ]]
+}
+
 @test "dry-run: Phase 1-5 が実行済みであること（出力メッセージ確認）" {
     run "$PROJECT_ROOT/scripts/ignite" start --dry-run --skip-validation -n -w "$TEST_WORKSPACE"
 

@@ -64,6 +64,11 @@ cmd_start() {
         esac
     done
 
+    # 非対話/NO_COLOR の場合はカラー出力を無効化（stderr含む）
+    if [[ -n "${NO_COLOR:-}" ]] || ! [[ -t 1 ]] || ! [[ -t 2 ]]; then
+        GREEN='' BLUE='' YELLOW='' RED='' CYAN='' BOLD='' NC=''
+    fi
+
     # セッション名が未指定の場合は自動生成
     if [[ -z "$SESSION_NAME" ]]; then
         SESSION_NAME=$(generate_session_id)

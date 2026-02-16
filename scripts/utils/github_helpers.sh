@@ -159,6 +159,55 @@ get_bot_token() {
 # GitHub API ヘルパー（Bot Token自動適用）
 # =============================================================================
 
+github_api_request() {
+    local repo="$1"
+    local method="$2"
+    local endpoint="$3"
+    local data="${4:-}"
+    local use_bot="${5:-false}"
+
+    local url="https://api.github.com${endpoint}"
+
+    local token=""
+    if [[ "$use_bot" == "true" ]]; then
+        token=$(get_cached_bot_token "$repo" 2>/dev/null) || true
+    else
+        token="${GH_TOKEN:-}"
+    fi
+
+    local -a curl_args
+    curl_args=(
+        -sS
+        -X "$method"
+        -H "Accept: application/vnd.github+json"
+    )
+
+    if [[ -n "$token" ]]; then
+        curl_args+=( -H "Authorization: token ${token}" )
+    fi
+
+    if [[ -n "$data" ]]; then
+        curl_args+=( -H "Content-Type: application/json" -d "$data" )
+    fi
+
+    curl "${curl_args[@]}" "$url"
+}
+
+github_api_get() {
+    local repo="$1"
+    local endpoint="$2"
+    local use_bot="${3:-false}"
+    github_api_request "$repo" "GET" "$endpoint" "" "$use_bot"
+}
+
+github_api_post() {
+    local repo="$1"
+    local endpoint="$2"
+    local data="$3"
+    local use_bot="${4:-false}"
+    github_api_request "$repo" "POST" "$endpoint" "$data" "$use_bot"
+}
+
 # =============================================================================
 # Git操作ラッパー（認証エラー検出→Token更新→リトライ）
 # =============================================================================

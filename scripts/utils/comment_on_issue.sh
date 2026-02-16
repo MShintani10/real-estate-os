@@ -155,6 +155,43 @@ EOF
 # コメント投稿
 # =============================================================================
 
+fetch_issue_comments() {
+    local repo="$1"
+    local issue_number="$2"
+    local use_bot="$3"
+
+    local page=1
+    local merged="[]"
+
+    while :; do
+        local response
+        response=$(github_api_get "$repo" "/repos/${repo}/issues/${issue_number}/comments?per_page=100&page=${page}" "$use_bot" 2>/dev/null) || true
+        if [[ -z "$response" ]]; then
+            break
+        fi
+
+        if ! jq -e 'type == "array"' >/dev/null 2>&1 <<<"$response"; then
+            break
+        fi
+
+        local count
+        count=$(jq 'length' <<<"$response" 2>/dev/null) || count=0
+        if [[ "$count" -eq 0 ]]; then
+            break
+        fi
+
+        merged=$(jq -s 'add' <(printf '%s' "$merged") <(printf '%s' "$response"))
+        page=$((page + 1))
+    done
+
+    if [[ "$merged" == "[]" ]]; then
+        echo ""
+        return 1
+    fi
+
+    echo "$merged"
+}
+
 _is_duplicate_comment() {
     local repo="$1"
     local issue_number="$2"
@@ -164,22 +201,8 @@ _is_duplicate_comment() {
     local trimmed_body
     trimmed_body=$(printf '%s' "$body" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
-    # 既存コメントをJSON配列で一括取得
-    local comments_json=""
-    if [[ "$use_bot" == "true" ]]; then
-        local bot_token
-        bot_token=$(get_bot_token "$repo" 2>/dev/null) || true
-        if [[ -n "$bot_token" ]]; then
-            comments_json=$(GH_TOKEN="$bot_token" gh api \
-                "/repos/${repo}/issues/${issue_number}/comments" \
-                --paginate 2>/dev/null) || true
-        fi
-    fi
-    if [[ -z "$comments_json" ]]; then
-        comments_json=$(env -u GH_TOKEN gh api \
-            "/repos/${repo}/issues/${issue_number}/comments" \
-            --paginate 2>/dev/null) || true
-    fi
+    local comments_json
+    comments_json=$(fetch_issue_comments "$repo" "$issue_number" "$use_bot")
 
     if [[ -z "$comments_json" ]]; then
         log_warn "コメント一覧取得失敗。重複チェックをスキップして投稿を続行します。"
@@ -187,10 +210,9 @@ _is_duplicate_comment() {
     fi
 
     # jqで各コメントbodyをtrimして比較
-    # --slurp: gh api --paginateが複数ページ返す場合の連結JSON配列を単一配列に統合
     local match
-    match=$(printf '%s' "$comments_json" | jq --slurp --arg new_body "$trimmed_body" '
-        [.[][] | .body | gsub("^\\s+|\\s+$"; "")] | any(. == $new_body)
+    match=$(printf '%s' "$comments_json" | jq --arg new_body "$trimmed_body" '
+        [.[] | .body | gsub("^\\s+|\\s+$"; "")] | any(. == $new_body)
     ' 2>/dev/null) || true
 
     if [[ "$match" == "true" ]]; then
@@ -211,24 +233,26 @@ post_comment() {
         return 0
     fi
 
+    local payload
+    payload=$(jq -n --arg body "$body" '{body: $body}')
+
     if [[ "$use_bot" == "true" ]]; then
-        # キャッシュ付きBot Token取得（期限切れなら自動更新）
-        local bot_token
-        bot_token=$(get_bot_token "$repo")
-        if [[ -n "$bot_token" ]]; then
-            log_info "Bot名義でコメントを投稿中... (REST API)"
-            if GH_TOKEN="$bot_token" gh api "/repos/${repo}/issues/${issue_number}/comments" \
-                -f body="$body" --silent 2>/dev/null; then
-                return 0
-            fi
-            log_warn "Bot Tokenでの投稿失敗。通常のトークンで投稿します。"
-        else
-            log_warn "Bot Token取得失敗。通常のトークンで投稿します。"
+        log_info "Bot名義でコメントを投稿中... (REST API)"
+        local response
+        response=$(github_api_post "$repo" "/repos/${repo}/issues/${issue_number}/comments" "$payload" true 2>/dev/null) || true
+        if [[ -n "$response" ]] && jq -e '.id' >/dev/null 2>&1 <<<"$response"; then
+            return 0
         fi
+        log_warn "Bot Tokenでの投稿失敗。通常のトークンで投稿します。"
     fi
 
     log_info "コメントを投稿中..."
-    env -u GH_TOKEN gh api "/repos/${repo}/issues/${issue_number}/comments" -f body="$body" --silent
+    local response
+    response=$(github_api_post "$repo" "/repos/${repo}/issues/${issue_number}/comments" "$payload" false 2>/dev/null) || true
+    if [[ -n "$response" ]] && jq -e '.id' >/dev/null 2>&1 <<<"$response"; then
+        return 0
+    fi
+    return 1
 }
 
 # =============================================================================
@@ -303,7 +327,7 @@ main() {
 
     # リポジトリ推測
     if [[ -z "$repo" ]]; then
-        repo=$(gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null || echo "")
+        repo=$(_get_repo_from_remote 2>/dev/null || true)
         if [[ -z "$repo" ]]; then
             log_error "リポジトリを指定してください: --repo owner/repo"
             exit 1

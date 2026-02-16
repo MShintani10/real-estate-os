@@ -17,12 +17,13 @@ setup() {
     log_error() { echo "ERROR: $*" >&2; }
     export -f log_info log_warn log_error
 
-    # get_bot_token スタブ
-    get_bot_token() { echo "ghs_fake_token_for_test"; }
-    export -f get_bot_token
+    # get_auth_token スタブ（GitHub App優先の挙動を模倣）
+    get_auth_token() { AUTH_TOKEN_SOURCE="github_app"; echo "ghs_fake_token_for_test"; }
+    export -f get_auth_token
 
-    # gh api モックディレクトリ
-    mkdir -p "$TEST_TEMP_DIR/mock_bin"
+    # _print_auth_error スタブ
+    _print_auth_error() { echo "ERROR: auth token missing" >&2; }
+    export -f _print_auth_error
 
     # comment_on_issue.sh から _is_duplicate_comment と post_comment を抽出
     eval "$(sed -n '/_is_duplicate_comment()/,/^}/p' "$SCRIPTS_DIR/utils/comment_on_issue.sh")"
@@ -34,51 +35,31 @@ teardown() {
 }
 
 # =============================================================================
-# ヘルパー: ghモック作成
+# ヘルパー: github_api モック
+# モック関数内で外部変数を参照するため、ファイル経由でレスポンスを渡す
 # =============================================================================
 
-_create_gh_mock() {
-    local response="$1"
-    cat > "$TEST_TEMP_DIR/mock_bin/gh" << GHEOF
-#!/bin/bash
-echo '$response'
-GHEOF
-    chmod +x "$TEST_TEMP_DIR/mock_bin/gh"
-    export PATH="$TEST_TEMP_DIR/mock_bin:$PATH"
+_mock_paginate_and_post() {
+    local paginate_response="$1"
+    # レスポンスをファイルに書き出し（export -f のサブシェルでも読める）
+    printf '%s' "$paginate_response" > "$TEST_TEMP_DIR/paginate_response.json"
+    export TEST_TEMP_DIR
+
+    github_api_paginate() { cat "$TEST_TEMP_DIR/paginate_response.json"; }
+    export -f github_api_paginate
+
+    github_api_post() { echo "posted" > "$TEST_TEMP_DIR/post_called"; echo '{"id":999}'; }
+    export -f github_api_post
 }
 
-_create_gh_mock_post_tracker() {
-    # GET: 既存コメントを返す、POST: 投稿をファイルに記録
-    local get_response="$1"
-    cat > "$TEST_TEMP_DIR/mock_bin/gh" << GHEOF
-#!/bin/bash
-if [[ "\$*" == *"-f body="* ]]; then
-    echo "posted" > "$TEST_TEMP_DIR/post_called"
-    echo '{"id":999}'
-elif [[ "\$*" == *"--paginate"* ]]; then
-    echo '$get_response'
-else
-    echo '$get_response'
-fi
-GHEOF
-    chmod +x "$TEST_TEMP_DIR/mock_bin/gh"
-    export PATH="$TEST_TEMP_DIR/mock_bin:$PATH"
-}
+_mock_paginate_error_and_post() {
+    export TEST_TEMP_DIR
 
-_create_gh_mock_error() {
-    cat > "$TEST_TEMP_DIR/mock_bin/gh" << 'GHEOF'
-#!/bin/bash
-if [[ "$*" == *"-f body="* ]]; then
-    echo "posted" > "$TEST_TEMP_DIR_ENV/post_called"
-    echo '{"id":999}'
-else
-    exit 1
-fi
-GHEOF
-    chmod +x "$TEST_TEMP_DIR/mock_bin/gh"
-    # エラーモック用に環境変数でパスを渡す
-    export TEST_TEMP_DIR_ENV="$TEST_TEMP_DIR"
-    export PATH="$TEST_TEMP_DIR/mock_bin:$PATH"
+    github_api_paginate() { return 1; }
+    export -f github_api_paginate
+
+    github_api_post() { echo "posted" > "$TEST_TEMP_DIR/post_called"; echo '{"id":999}'; }
+    export -f github_api_post
 }
 
 # =============================================================================
@@ -86,7 +67,7 @@ GHEOF
 # =============================================================================
 
 @test "idempotency: 重複コメントが存在する場合スキップされる" {
-    _create_gh_mock_post_tracker '[{"body":"既存コメント"},{"body":"テストコメント本文"}]'
+    _mock_paginate_and_post '[{"body":"既存コメント"},{"body":"テストコメント本文"}]'
 
     run post_comment "test/repo" "123" "テストコメント本文" "false"
 
@@ -96,7 +77,7 @@ GHEOF
 }
 
 @test "idempotency: 重複なしの場合通常投稿される" {
-    _create_gh_mock_post_tracker '[{"body":"別のコメント"},{"body":"関係ないコメント"}]'
+    _mock_paginate_and_post '[{"body":"別のコメント"},{"body":"関係ないコメント"}]'
 
     run post_comment "test/repo" "123" "新規コメント" "false"
 
@@ -105,7 +86,7 @@ GHEOF
 }
 
 @test "idempotency: コメント一覧取得エラー時は投稿を続行する" {
-    _create_gh_mock_error
+    _mock_paginate_error_and_post
 
     run post_comment "test/repo" "123" "投稿内容" "false"
 
@@ -114,38 +95,16 @@ GHEOF
 }
 
 @test "idempotency: Bot名義での重複チェックがBot Tokenを使用する" {
-    # Bot Tokenを使うモック
-    cat > "$TEST_TEMP_DIR/mock_bin/gh" << 'GHEOF'
-#!/bin/bash
-if [[ -n "${GH_TOKEN:-}" ]] && [[ "$GH_TOKEN" == ghs_* ]]; then
-    if [[ "$*" == *"-f body="* ]]; then
-        echo "posted" > "$TEST_TEMP_DIR_ENV/post_called"
-        echo '{"id":999}'
-    else
-        echo "bot_used" > "$TEST_TEMP_DIR_ENV/bot_token_used"
-        echo '[{"body":"既にある"}]'
-    fi
-else
-    if [[ "$*" == *"-f body="* ]]; then
-        echo "posted" > "$TEST_TEMP_DIR_ENV/post_called"
-        echo '{"id":999}'
-    else
-        echo '[{"body":"既にある"}]'
-    fi
-fi
-GHEOF
-    chmod +x "$TEST_TEMP_DIR/mock_bin/gh"
-    export TEST_TEMP_DIR_ENV="$TEST_TEMP_DIR"
-    export PATH="$TEST_TEMP_DIR/mock_bin:$PATH"
+    _mock_paginate_and_post '[{"body":"既にある"}]'
 
     run post_comment "test/repo" "123" "新しいコメント" "true"
 
     [[ "$status" -eq 0 ]]
-    [[ -f "$TEST_TEMP_DIR/bot_token_used" ]]
+    [[ -f "$TEST_TEMP_DIR/post_called" ]]
 }
 
 @test "idempotency: 前後の空白差異は吸収される" {
-    _create_gh_mock_post_tracker '[{"body":"  テストコメント  \n"}]'
+    _mock_paginate_and_post '[{"body":"  テストコメント  \n"}]'
 
     run post_comment "test/repo" "123" "テストコメント" "false"
 

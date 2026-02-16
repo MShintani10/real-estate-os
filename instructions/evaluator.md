@@ -713,7 +713,7 @@ payload:
   issue_number: {ISSUE_NUMBER}
 ```
 
-**注意**: bare `gh` コマンドで直接 Issue を起票しない — 必ず Leader 経由で提案する。
+**注意**: GitHub API を直接呼び出して Issue を起票しない — 必ず Leader 経由で提案する。
 
 ## ログ記録
 

@@ -507,7 +507,7 @@ sqlite3 "$WORKSPACE_DIR/state/memory.db" "PRAGMA busy_timeout=5000; \
 ```
 
 ### 禁止事項（issue_proposal 固有）
-- **bare `gh` コマンドで直接 Issue を起票しない** — 必ず Coordinator 経由で提案する
+- **GitHub API を直接呼び出して Issue を起票しない** — 必ず Coordinator 経由で提案する
 - evidence なしの提案を送信しない（`file_path` と `description` は必須）
 - 自身のタスクスコープ内の問題を issue_proposal にしない（それはタスク内で修正する）
 
@@ -912,7 +912,7 @@ GitHub上でコメント投稿やPR作成を行う場合、**必ずBot名義で�
 ```
 
 ### 禁止事項
-- **bare `gh` コマンドでのGitHub操作禁止**: `gh issue comment`, `gh pr create`, `gh api` を直接呼び出さない
+- **bare `gh` コマンドおよび直接 `curl` でのGitHub操作禁止**: 必ず `github_helpers.sh` の `github_api_get`/`github_api_post` 等のラッパー関数、またはヘルパースクリプト（`comment_on_issue.sh`, `create_pr.sh` 等）を使用すること
 - **`--bot` フラグの省略禁止**: ヘルパースクリプト使用時は必ず `--bot` を付ける
 - **フォールバック時の独自対処禁止**: スクリプトがBot Token取得に失敗した場合、内部で自動フォールバックする。スクリプトの終了コードに従い、独自にトークン取得やリトライを試みないこと
 

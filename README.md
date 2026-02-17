@@ -112,7 +112,6 @@ IGNITEメンバーへの愛を胸に、Coordinatorから割り当てられたタ
 - **並列タスク実行**: タスクの性質に応じて1-32のワーカーが並列実行
 - **キャラクター性**: 各エージェントは個性と専門性を持つ
 - **完全なローカル実行**: OpenCodeのフル機能をローカルPCで活用
-- **コスト追跡**: エージェントごとのトークン消費量と費用をリアルタイムで確認
 - **エージェントメモリ永続化**: SQLiteによるセッション間の学習・決定記録保持
 - **日次レポート管理**: 作業進捗をリポジトリ別 GitHub Issues で自動追跡
 - **設定可能な遅延**: エージェント間の通信遅延をカスタマイズ可能
@@ -362,35 +361,7 @@ ignite stop
 ignite stop -y
 ```
 
-### 5. コスト確認
-
-```bash
-# トークン消費量と費用を表示
-ignite cost
-
-# 詳細表示（IGNITIANs個別表示）
-ignite cost -d
-
-# JSON形式で出力
-ignite cost -j
-```
-
-**表示例:**
-```
-┌────────────────┬──────────────┬──────────────┬───────────────┬─────────────┐
-│ エージェント   │ 入力トークン │ 出力トークン │    Cache(R/W) │  費用 (USD) │
-├────────────────┼──────────────┼──────────────┼───────────────┼─────────────┤
-│ 伊羽ユイ       │          236 │          339 │       1.7/.2M │   $    2.57 │
-│ ...            │              │              │               │             │
-├────────────────┼──────────────┼──────────────┼───────────────┼─────────────┤
-│ 合計           │       22,322 │       14,302 │    139.6/3.7M │   $   93.83 │
-└────────────────┴──────────────┴──────────────┴───────────────┴─────────────┘
-
-料金: Claude Opus 4.5 ($5.00/1M入力, $25.00/1M出力)
-日本円概算: ¥14,074 (税別, $1=¥150.0)
-```
-
-### 6. workspaceクリア
+### 5. workspaceクリア
 
 ```bash
 ignite clean
@@ -497,10 +468,8 @@ ignite/
 │   │   ├── cmd_stop.sh         # stop コマンド
 │   │   ├── cmd_plan.sh         # plan コマンド
 │   │   ├── cmd_status.sh       # status コマンド
-│   │   ├── cmd_cost.sh         # cost コマンド
 │   │   ├── cmd_help.sh         # help コマンド
 │   │   ├── cmd_work_on.sh      # work-on コマンド
-│   │   ├── cost_utils.sh       # コスト計算ユーティリティ
 │   │   ├── dlq_handler.sh      # デッドレターキュー処理
 │   │   └── retry_handler.sh    # リトライ処理
 │   └── utils/                  # ユーティリティスクリプト
@@ -524,7 +493,6 @@ ignite/
 │
 ├── config/                     # 設定ファイル
 │   ├── system.yaml             # システム全体の設定
-│   ├── pricing.yaml            # Claude API料金設定
 │   └── github-watcher.yaml     # GitHub Watcher設定
 │
 ├── workspace/                  # 実行時ワークスペース（.gitignoreで除外）
@@ -570,7 +538,6 @@ ignite/
 | `attach` | エージェントセッションに接続 | `ignite attach` |
 | `logs` | ログ表示 | `ignite logs` |
 | `clean` | workspaceクリア | `ignite clean` |
-| `cost` | トークン消費量・費用を表示 | `ignite cost` |
 | `work-on` | Issue番号を指定して実装開始 | `ignite work-on 123 --repo owner/repo` |
 | `watcher` | GitHub Watcherを管理 | `ignite watcher start` |
 | `list` | セッション一覧表示 | `ignite list` |

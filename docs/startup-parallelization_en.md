@@ -16,7 +16,7 @@ setup_workspace
             -> leader start
               -> sub-leaders start (optional)
                 -> ignitians start (optional)
-                  -> runtime.yaml / sessions.yaml / costs
+                  -> runtime.yaml / sessions.yaml
                     -> watcher start (optional)
                       -> queue_monitor start
 ```

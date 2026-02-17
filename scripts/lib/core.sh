@@ -53,10 +53,6 @@ unset _CHARACTERS_FILE
 DEFAULT_MODEL="openai/gpt-5.2-codex"
 DEFAULT_WORKER_COUNT=3
 
-# Claude セッションデータのパス（PROJECT_ROOT から動的に生成）
-# Claude Code は /path/to/project を -path-to-project に変換してディレクトリ名にする
-CLAUDE_PROJECTS_DIR="$HOME/.claude/projects/$(echo "$PROJECT_ROOT" | sed 's|/|-|g')"
-
 # カラー定義（TTY検出 + NO_COLOR対応）
 if [[ -n "${NO_COLOR:-}" ]] || ! [[ -t 1 ]] || [[ "${TERM:-}" == "dumb" ]]; then
     GREEN='' BLUE='' YELLOW='' RED='' CYAN='' BOLD='' NC=''

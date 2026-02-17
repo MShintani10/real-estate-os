@@ -99,9 +99,6 @@ cmd_stop() {
         rm -f "$IGNITE_RUNTIME_DIR/queue_monitor.pid"
     fi
 
-    # コスト履歴を保存
-    save_cost_history
-
     # エージェントプロセス停止（PID ベース）
     print_warning "エージェントプロセスを停止中..."
     for pid_file in "$IGNITE_RUNTIME_DIR/state"/.agent_pid_*; do

@@ -95,9 +95,6 @@ YAML
     touch "$ws_ignite/system.yaml"
     setup_workspace_config "$TEST_TEMP_DIR/workspace" 2>/dev/null
 
-    # IGNITE_CONFIG_DIRは.ignite/に切り替わっている → pricing.yamlは無い
-    run resolve_config "pricing.yaml"
-    [[ "$status" -eq 1 ]]
 }
 
 @test "TC-4: resolve_config - github-app.yamlも同一ロジック（特別扱いなし）" {

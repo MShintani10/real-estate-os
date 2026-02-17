@@ -113,7 +113,6 @@ With love for IGNITE members in their hearts, they execute tasks assigned by Coo
 - **Character Personality**: Each agent has unique personality and expertise
 - **Fully Local Execution**: Leverage full OpenCode capabilities on local PC
 - **Headless Agent Servers**: Each agent runs as an independent HTTP server process
-- **Cost Tracking**: Real-time token usage and cost monitoring per agent
 - **Agent Memory Persistence**: SQLite-based retention of learning and decision records across sessions
 - **Daily Report Management**: Automatic progress tracking via per-repository GitHub Issues
 - **Configurable Delays**: Customize inter-agent communication delays
@@ -370,35 +369,7 @@ ignite stop
 ignite stop -y
 ```
 
-### 5. Check Costs
-
-```bash
-# Show token usage and costs
-ignite cost
-
-# Detailed view (individual IGNITIANs)
-ignite cost -d
-
-# JSON output
-ignite cost -j
-```
-
-**Example Output:**
-```
-┌────────────────┬──────────────┬───────────────┬───────────────┬─────────────┐
-│ Agent          │ Input Tokens │ Output Tokens │    Cache(R/W) │  Cost (USD) │
-├────────────────┼──────────────┼───────────────┼───────────────┼─────────────┤
-│ Yui Iha        │          236 │           339 │       1.7/.2M │   $    2.57 │
-│ ...            │              │               │               │             │
-├────────────────┼──────────────┼───────────────┼───────────────┼─────────────┤
-│ Total          │       22,322 │        14,302 │    139.6/3.7M │   $   93.83 │
-└────────────────┴──────────────┴───────────────┴───────────────┴─────────────┘
-
-Rates: Claude Opus 4.5 ($5.00/1M input, $25.00/1M output)
-JPY estimate: ¥14,074 (excl. tax, $1=¥150.0)
-```
-
-### 6. Clear Workspace
+### 5. Clear Workspace
 
 ```bash
 ignite clean
@@ -505,10 +476,8 @@ ignite/
 │   │   ├── cmd_stop.sh         # stop command
 │   │   ├── cmd_plan.sh         # plan command
 │   │   ├── cmd_status.sh       # status command
-│   │   ├── cmd_cost.sh         # cost command
 │   │   ├── cmd_help.sh         # help command
 │   │   ├── cmd_work_on.sh      # work-on command
-│   │   ├── cost_utils.sh       # Cost calculation utilities
 │   │   ├── dlq_handler.sh      # Dead letter queue handler
 │   │   └── retry_handler.sh    # Retry handler
 │   └── utils/                  # Utility scripts
@@ -532,7 +501,6 @@ ignite/
 │
 ├── config/                     # Configuration files
 │   ├── system.yaml             # System-wide settings
-│   ├── pricing.yaml            # Claude API pricing settings
 │   └── github-watcher.yaml     # GitHub Watcher settings
 │
 ├── workspace/                  # Runtime workspace (excluded via .gitignore)
@@ -578,7 +546,6 @@ ignite/
 | `attach` | Connect to agent session | `ignite attach` |
 | `logs` | View logs | `ignite logs` |
 | `clean` | Clear workspace | `ignite clean` |
-| `cost` | Show token usage and costs | `ignite cost` |
 | `work-on` | Start implementation for Issue | `ignite work-on 123 --repo owner/repo` |
 | `watcher` | Manage GitHub Watcher | `ignite watcher start` |
 | `list` | List sessions | `ignite list` |

@@ -389,12 +389,9 @@ cmd_clean() {
         echo "  - $IGNITE_RUNTIME_DIR/context/*"
         echo "  - $IGNITE_RUNTIME_DIR/state/*"
         echo "  - $IGNITE_RUNTIME_DIR/archive/*"
-        echo "  - $IGNITE_RUNTIME_DIR/costs/sessions.yaml"
         echo "  - $IGNITE_RUNTIME_DIR/dashboard.md"
         echo "  - $IGNITE_RUNTIME_DIR/runtime.yaml"
         echo "  - $IGNITE_RUNTIME_DIR/coordinator_state.yaml"
-        echo ""
-        echo -e "${YELLOW}注意: $IGNITE_RUNTIME_DIR/costs/history/ はクリアされません（履歴保持）${NC}"
         echo ""
         read -p "続行しますか? (y/N): " -n 1 -r
         echo
@@ -424,9 +421,6 @@ cmd_clean() {
     rm -rf "$IGNITE_RUNTIME_DIR/state"/*
     rm -rf "$IGNITE_RUNTIME_DIR/archive"/*
     mkdir -p "$IGNITE_RUNTIME_DIR/archive"/{leader,strategist,coordinator}
-
-    # コストのセッション情報をクリア（履歴は保持）
-    rm -f "$IGNITE_RUNTIME_DIR/costs/sessions.yaml"
 
     print_success "workspaceをクリアしました"
 }

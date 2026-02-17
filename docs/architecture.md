@@ -166,7 +166,6 @@ ignite/
 │   │   ├── session.sh    # セッション管理
 │   │   ├── commands.sh   # コマンドルーター
 │   │   ├── cmd_*.sh      # 各サブコマンド実装
-│   │   ├── cost_utils.sh # コスト計算
 │   │   ├── dlq_handler.sh    # デッドレターキュー処理
 │   │   └── retry_handler.sh  # リトライ処理
 │   └── utils/            # ユーティリティ

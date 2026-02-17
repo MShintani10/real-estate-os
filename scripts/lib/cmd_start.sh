@@ -172,22 +172,70 @@ cmd_start() {
     cd "$WORKSPACE_DIR" || return 1
 
     # 既存のセッションチェック
-    if session_exists; then
-        if [[ "$force" == true ]]; then
-            print_warning "既存のセッションを強制終了します"
-            tmux kill-session -t "$SESSION_NAME"
-            print_success "既存セッションを終了しました"
-        else
-            print_warning "既存のignite-sessionが見つかりました"
-            read -p "既存のセッションを終了して再起動しますか? (y/N): " -n 1 -r
-            echo
-            if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if cli_is_headless_mode; then
+        # ヘッドレス: PIDファイルでエージェントプロセスの存在をチェック
+        local _existing_agents=false
+        for _pid_file in "$IGNITE_RUNTIME_DIR"/state/.agent_pid_*; do
+            [[ -f "$_pid_file" ]] || continue
+            local _epid
+            _epid=$(cat "$_pid_file" 2>/dev/null || true)
+            if [[ -n "$_epid" ]] && kill -0 "$_epid" 2>/dev/null; then
+                _existing_agents=true
+                break
+            fi
+        done
+        if [[ "$_existing_agents" == true ]]; then
+            if [[ "$force" == true ]]; then
+                print_warning "既存のエージェントプロセスを強制終了します"
+                for _pid_file in "$IGNITE_RUNTIME_DIR"/state/.agent_pid_*; do
+                    [[ -f "$_pid_file" ]] || continue
+                    local _epid _pane_idx
+                    _epid=$(cat "$_pid_file" 2>/dev/null || true)
+                    _pane_idx=$(basename "$_pid_file" | sed 's/\.agent_pid_//')
+                    if [[ -n "$_epid" ]] && kill -0 "$_epid" 2>/dev/null; then
+                        _kill_agent_process "$_pane_idx"
+                    fi
+                done
+                print_success "既存エージェントプロセスを終了しました"
+            else
+                print_warning "既存のエージェントプロセスが見つかりました"
+                read -p "既存のプロセスを終了して再起動しますか? (y/N): " -n 1 -r
+                echo
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                    for _pid_file in "$IGNITE_RUNTIME_DIR"/state/.agent_pid_*; do
+                        [[ -f "$_pid_file" ]] || continue
+                        local _epid _pane_idx
+                        _epid=$(cat "$_pid_file" 2>/dev/null || true)
+                        _pane_idx=$(basename "$_pid_file" | sed 's/\.agent_pid_//')
+                        if [[ -n "$_epid" ]] && kill -0 "$_epid" 2>/dev/null; then
+                            _kill_agent_process "$_pane_idx"
+                        fi
+                    done
+                    print_success "既存エージェントプロセスを終了しました"
+                else
+                    print_info "既存のエージェントが稼働中です。ignite attach <agent> で接続できます。"
+                    exit 0
+                fi
+            fi
+        fi
+    else
+        if session_exists; then
+            if [[ "$force" == true ]]; then
+                print_warning "既存のセッションを強制終了します"
                 tmux kill-session -t "$SESSION_NAME"
                 print_success "既存セッションを終了しました"
             else
-                print_info "既存セッションにアタッチします"
-                tmux attach -t "$SESSION_NAME"
-                exit 0
+                print_warning "既存のignite-sessionが見つかりました"
+                read -p "既存のセッションを終了して再起動しますか? (y/N): " -n 1 -r
+                echo
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                    tmux kill-session -t "$SESSION_NAME"
+                    print_success "既存セッションを終了しました"
+                else
+                    print_info "既存セッションにアタッチします"
+                    tmux attach -t "$SESSION_NAME"
+                    exit 0
+                fi
             fi
         fi
     fi
@@ -265,12 +313,29 @@ EOF
         fi
         rm -f "$IGNITE_RUNTIME_DIR/queue_monitor.pid"
     fi
+    # ヘッドレスモード: 孤立エージェントプロセスのクリーンアップ
+    if cli_is_headless_mode; then
+        for _pid_file in "$IGNITE_RUNTIME_DIR"/state/.agent_pid_*; do
+            [[ -f "$_pid_file" ]] || continue
+            local old_pid _pane_idx
+            old_pid=$(cat "$_pid_file" 2>/dev/null || true)
+            _pane_idx=$(basename "$_pid_file" | sed 's/\.agent_pid_//')
+            if [[ -n "$old_pid" ]] && kill -0 "$old_pid" 2>/dev/null; then
+                kill "$old_pid" 2>/dev/null || true
+            fi
+            cli_cleanup_agent_state "$_pane_idx"
+        done
+    fi
     sleep "$(get_delay process_cleanup 1)"
 
     # --dry-run モード: Phase 1-5 完了後、tmux/CLI/Watcher/Monitor起動をスキップして終了
     if [[ "$dry_run" == true ]]; then
         # Phase 8: ランタイム情報ファイル生成（dry-runでも実行）
         print_info "ランタイム情報を保存中..."
+        local _dry_run_headless=""
+        if cli_is_headless_mode; then
+            _dry_run_headless=$'\n  headless: true'
+        fi
         cat > "$IGNITE_RUNTIME_DIR/runtime.yaml" <<EOF
 # IGNITE ランタイム情報（自動生成 - dry-run）
 # このファイルはシステム起動時に自動的に更新されます
@@ -280,7 +345,8 @@ system:
   agent_mode: "${agent_mode}"
   session_name: "${SESSION_NAME}"
   workspace_dir: "${WORKSPACE_DIR}"
-  dry_run: true
+  startup_status: "complete"
+  dry_run: true${_dry_run_headless}
 
 ignitians:
   count: 0
@@ -299,7 +365,11 @@ EOF
         echo "  Phase 8: システム設定生成 ... OK"
         echo ""
         echo "スキップ項目:"
-        echo "  Phase 6: tmuxセッション作成"
+        if cli_is_headless_mode; then
+            echo "  Phase 6: エージェントサーバー起動"
+        else
+            echo "  Phase 6: tmuxセッション作成"
+        fi
         echo "  Phase 7: AI CLI起動"
         echo "  Phase 9: Watcher/Monitor起動"
         echo ""
@@ -307,18 +377,21 @@ EOF
         exit 0
     fi
 
-    # tmuxセッション作成
-    print_info "tmuxセッションを作成中..."
-    tmux new-session -d -s "$SESSION_NAME" -n "$TMUX_WINDOW_NAME"
-    sleep "$(get_delay session_create 0.5)"  # セッション作成を待機
+    # tmuxセッション作成（ヘッドレスモードではスキップ）
+    if cli_is_headless_mode; then
+        print_info "ヘッドレスモード: エージェントサーバーを起動します..."
+    else
+        print_info "tmuxセッションを作成中..."
+        tmux new-session -d -s "$SESSION_NAME" -n "$TMUX_WINDOW_NAME"
+        sleep "$(get_delay session_create 0.5)"  # セッション作成を待機
 
-    # ペインボーダーにキャラクター名を常時表示
-    tmux set-option -t "$SESSION_NAME" pane-border-status top
-    tmux set-option -t "$SESSION_NAME" pane-border-format " #{@agent_name} "
+        # ペインボーダーにキャラクター名を常時表示
+        tmux set-option -t "$SESSION_NAME" pane-border-status top
+        tmux set-option -t "$SESSION_NAME" pane-border-format " #{@agent_name} "
+    fi
 
     # Leader ペイン (pane 0)
     print_info "Leader ($LEADER_NAME) を起動中..."
-    tmux set-option -t "$SESSION_NAME:$TMUX_WINDOW_NAME.0" -p @agent_name "$LEADER_NAME (Leader)"
 
     # Bot Token: GH_TOKEN env var にはexportしない（stale化防止）
     # 理由: GitHub App Token有効期限1時間後にstale化→
@@ -341,45 +414,86 @@ EOF
     # プロバイダー固有のプロジェクト設定を生成（インストラクションファイルを渡す）
     cli_setup_project_config "$WORKSPACE_DIR" "leader" "$character_file" "$instruction_file"
 
-    local _launch_cmd
-    _launch_cmd=$(cli_build_launch_command "$WORKSPACE_DIR" "" "$_gh_export" "leader")
-    tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME" "$_launch_cmd" Enter
+    if cli_is_headless_mode; then
+        # ヘッドレス: opencode serve でLeaderを起動
+        _start_agent_headless "leader" "$LEADER_NAME" 0 "$_gh_export" || {
+            print_warning "Leader 起動失敗、リカバリ中..."
+            (
+                set +e
+                _kill_agent_process 0
+                _start_agent_headless "leader" "$LEADER_NAME" 0 "$_gh_export"
+            ) || true
+        }
 
-    # 起動待機（確認プロンプト表示を待つ）
-    print_warning "Leaderの起動を待機中... (3秒)"
-    sleep "$(get_delay leader_startup 3)"
-
-    # 確認プロンプトを通過（プロバイダーが必要とする場合のみ）
-    if cli_needs_permission_accept; then
-        print_info "権限確認を承諾中..."
-        tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME" Down
-        sleep "$(get_delay permission_accept 0.5)"
-        tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME" Enter
-    fi
-
-    # CLIの起動完了を待機
-    print_warning "${CLI_COMMAND}の起動を待機中... (8秒)"
-    sleep "$(get_delay cli_startup 8)"
-
-    # Leaderにシステムプロンプトを読み込ませる（絶対パスを使用）
-    print_info "Leaderシステムプロンプトをロード中..."
-    local _leader_target="$SESSION_NAME:$TMUX_WINDOW_NAME"
-    cli_wait_tui_ready "$_leader_target"
-
-    if cli_needs_prompt_injection; then
-        tmux send-keys -l -t "$_leader_target" \
-            "以下のファイルを読んでください: $character_file と $instruction_file あなたはLeader（${LEADER_NAME}）として振る舞ってください。ワークスペースは $WORKSPACE_DIR です。起動時の初期化を行ってください。以降のメッセージ通知は queue_monitor が tmux 経由で送信します。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
+        # Leader ヘルスチェック
+        local _leader_port
+        _leader_port=$(cat "$IGNITE_RUNTIME_DIR/state/.agent_port_0" 2>/dev/null || true)
+        if [[ -n "$_leader_port" ]]; then
+            if ! cli_check_server_health "$_leader_port" 2>/dev/null; then
+                print_warning "Leader サーバー応答なし、リカバリ中..."
+                (
+                    set +e
+                    _kill_agent_process 0
+                    _start_agent_headless "leader" "$LEADER_NAME" 0 "$_gh_export"
+                ) || true
+            fi
+        fi
     else
-        # opencode: instructions は設定ファイル経由で読み込み済み。パス読み替え情報 + 起動トリガーを送信
-        tmux send-keys -l -t "$_leader_target" \
-            "あなたはLeader（${LEADER_NAME}）です。ワークスペースは $WORKSPACE_DIR です。起動時の初期化を行ってください。以降のメッセージ通知は queue_monitor が tmux 経由で送信します。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
-    fi
-    sleep "$(get_delay prompt_send 0.3)"
-    eval "tmux send-keys -t '$_leader_target' $(cli_get_submit_keys)"
+        tmux set-option -t "$SESSION_NAME:$TMUX_WINDOW_NAME.0" -p @agent_name "$LEADER_NAME (Leader)"
 
-    # プロンプトロード完了を待機
-    print_warning "Leaderの初期化を待機中... (10秒)"
-    sleep "$(get_delay leader_init 10)"
+        local _launch_cmd
+        _launch_cmd=$(cli_build_launch_command "$WORKSPACE_DIR" "" "$_gh_export" "leader")
+        tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME" "$_launch_cmd" Enter
+
+        # 起動待機（確認プロンプト表示を待つ）
+        print_warning "Leaderの起動を待機中... (3秒)"
+        sleep "$(get_delay leader_startup 3)"
+
+        # 確認プロンプトを通過（プロバイダーが必要とする場合のみ）
+        if cli_needs_permission_accept; then
+            print_info "権限確認を承諾中..."
+            tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME" Down
+            sleep "$(get_delay permission_accept 0.5)"
+            tmux send-keys -t "$SESSION_NAME:$TMUX_WINDOW_NAME" Enter
+        fi
+
+        # CLIの起動完了を待機
+        print_warning "${CLI_COMMAND}の起動を待機中... (8秒)"
+        sleep "$(get_delay cli_startup 8)"
+
+        # Leaderにシステムプロンプトを読み込ませる（絶対パスを使用）
+        print_info "Leaderシステムプロンプトをロード中..."
+        local _leader_target="$SESSION_NAME:$TMUX_WINDOW_NAME"
+        cli_wait_tui_ready "$_leader_target"
+
+        if cli_needs_prompt_injection; then
+            tmux send-keys -l -t "$_leader_target" \
+                "以下のファイルを読んでください: $character_file と $instruction_file あなたはLeader（${LEADER_NAME}）として振る舞ってください。ワークスペースは $WORKSPACE_DIR です。起動時の初期化を行ってください。以降のメッセージ通知は queue_monitor が tmux 経由で送信します。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
+        else
+            # opencode: instructions は設定ファイル経由で読み込み済み。パス読み替え情報 + 起動トリガーを送信
+            tmux send-keys -l -t "$_leader_target" \
+                "あなたはLeader（${LEADER_NAME}）です。ワークスペースは $WORKSPACE_DIR です。起動時の初期化を行ってください。以降のメッセージ通知は queue_monitor が tmux 経由で送信します。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
+        fi
+        sleep "$(get_delay prompt_send 0.3)"
+        eval "tmux send-keys -t '$_leader_target' $(cli_get_submit_keys)"
+
+        # プロンプトロード完了を待機
+        print_warning "Leaderの初期化を待機中... (10秒)"
+        sleep "$(get_delay leader_init 10)"
+
+        # Leader 起動後チェック（リカバリ中のエラーで起動全体を止めない）
+        local _leader_health
+        _leader_health=$(check_agent_health "$SESSION_NAME:$TMUX_WINDOW_NAME" 0 "$LEADER_NAME (Leader)" 2>/dev/null || echo "unknown")
+        if [[ "$_leader_health" == "crashed" ]] || [[ "$_leader_health" == "missing" ]]; then
+            print_warning "Leader プロンプト未応答 ($_leader_health)、リカバリ中..."
+            (
+                set +e
+                _kill_pane_process "$SESSION_NAME:$TMUX_WINDOW_NAME" 0
+                restart_leader_in_pane "$agent_mode" "$_gh_export"
+            ) || true
+            sleep "$(get_delay leader_init 10)"
+        fi
+    fi
 
     echo ""
     print_success "IGNITE Leader が起動しました"
@@ -392,6 +506,10 @@ EOF
 
     _create_agent_pane() {
         local pane_name="$1"
+        if cli_is_headless_mode; then
+            # ヘッドレス: tmux pane は不要（サーバープロセスで管理）
+            return 0
+        fi
         tmux split-window -t "$SESSION_NAME:$TMUX_WINDOW_NAME" -h
         tmux select-layout -t "$SESSION_NAME:$TMUX_WINDOW_NAME" tiled
         tmux set-option -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane_name" -p @agent_name "$2"
@@ -400,17 +518,20 @@ EOF
     local -a _job_pids=()
     declare -A _job_label=()
     declare -A _job_start=()
+    declare -A _job_pane=()
     local _job_success=0
     local _job_failed=0
 
     _start_job() {
         local label="$1"
-        shift
+        local pane_num="$2"
+        shift 2
         "$@" &
         local pid=$!
         _job_pids+=("$pid")
         _job_label["$pid"]="$label"
         _job_start["$pid"]="$(date +%s)"
+        _job_pane["$pid"]="$pane_num"
     }
 
     _reap_jobs() {
@@ -419,8 +540,7 @@ EOF
             if kill -0 "$pid" 2>/dev/null; then
                 remaining+=("$pid")
             else
-                wait "$pid"
-                local rc=$?
+                wait "$pid" && local rc=0 || local rc=$?
                 if [[ $rc -eq 0 ]]; then
                     _job_success=$(( _job_success + 1 ))
                 else
@@ -443,6 +563,14 @@ EOF
                 print_warning "${_job_label[$pid]} 起動タイムアウト (${elapsed}s)"
                 kill "$pid" 2>/dev/null || true
                 wait "$pid" 2>/dev/null || true
+                # pane 内プロセスも停止
+                if [[ -n "${_job_pane[$pid]:-}" ]]; then
+                    if cli_is_headless_mode; then
+                        _kill_agent_process "${_job_pane[$pid]}"
+                    else
+                        _kill_pane_process "$SESSION_NAME:$TMUX_WINDOW_NAME" "${_job_pane[$pid]}"
+                    fi
+                fi
                 _job_failed=$(( _job_failed + 1 ))
             else
                 remaining+=("$pid")
@@ -481,7 +609,7 @@ EOF
             local name="${SUB_LEADER_NAMES[$i]}"
             _create_agent_pane "$pane_num" "${name} (${role^})"
             _wait_for_slot
-            _start_job "Sub-Leader ${name}" start_agent_in_pane "$role" "$name" "$pane_num" "$_gh_export"
+            _start_job "Sub-Leader ${name}" "$pane_num" start_agent_in_pane "$role" "$name" "$pane_num" "$_gh_export"
             ((pane_num++))
         done
 
@@ -510,7 +638,7 @@ EOF
             local pane_num=$((start_pane + i - 1))
             _create_agent_pane "$pane_num" "IGNITIAN-${i}"
             _wait_for_slot
-            _start_job "IGNITIAN-${i}" start_ignitian_in_pane "$i" "$pane_num" "$_gh_export"
+            _start_job "IGNITIAN-${i}" "$pane_num" start_ignitian_in_pane "$i" "$pane_num" "$_gh_export"
         done
 
         _wait_all_jobs
@@ -518,8 +646,217 @@ EOF
         print_success "IGNITIANs 起動完了 (${actual_ignitian_count}/${worker_count}並列)"
     fi
 
+    # =========================================================================
+    # ポスト起動リカバリ: 全 pane をチェックし、スタックしたエージェントを復旧
+    # =========================================================================
+    _verify_agent_prompt() {
+        local session="$1"
+        local pane_idx="$2"
+
+        if cli_is_headless_mode; then
+            # ヘッドレス: PIDファイルとサーバーヘルスチェックで判定
+            cli_load_agent_state "$pane_idx"
+            local _h_pid="${_AGENT_PID:-}"
+            local _h_port="${_AGENT_PORT:-}"
+
+            # PIDが存在しない or プロセスが死亡 → 異常
+            if [[ -z "$_h_pid" ]] || ! kill -0 "$_h_pid" 2>/dev/null; then
+                return 1
+            fi
+
+            # サーバーヘルスチェック
+            if [[ -n "$_h_port" ]] && cli_check_server_health "$_h_port" 2>/dev/null; then
+                return 0  # 正常
+            fi
+
+            return 1  # サーバー応答なし
+        fi
+
+        # TUIモード: 既存のtmuxベース判定
+        # 1. ヘルスチェック（3層判定）
+        local _health _agent_name
+        _agent_name=$(tmux show-options -t "${session}.${pane_idx}" -v @agent_name 2>/dev/null || echo "unknown")
+        _health=$(check_agent_health "$session" "$pane_idx" "$_agent_name")
+
+        case "$_health" in
+            healthy|idle)
+                return 0  # 正常 — リカバリ不要
+                ;;
+            crashed|missing)
+                return 1  # 確実に異常 — リカバリ必要
+                ;;
+            # starting|stale → 以下のフォールバックで判定
+        esac
+
+        # 2. starting/stale: capture-pane でコンテンツ量から活動状態を判定
+        local _captured
+        _captured=$(tmux capture-pane -t "${session}.${pane_idx}" -p -S -50 2>/dev/null || true)
+
+        # TUI が起動して何らかのコンテンツが表示されていれば活動中と判断
+        # (空行のみ = bash プロンプトのまま → スタックの可能性あり)
+        local _content_lines
+        _content_lines=$(echo "$_captured" | grep -c '[^[:space:]]' || true)
+        if [[ "$_content_lines" -ge 5 ]]; then
+            return 0  # 十分なコンテンツあり → 活動中
+        fi
+
+        # コンテンツが少なすぎる → スタックの可能性
+        return 1
+    }
+
+    # リカバリ設定を読み込み（health: セクション下のネストキーを sed/awk で抽出）
+    local _recovery_max_attempts=2
+    local _recovery_wait=15
+    local sys_yaml="${IGNITE_CONFIG_DIR}/system.yaml"
+    if [[ -f "$sys_yaml" ]]; then
+        local _val
+        _val=$(sed -n '/^health:/,/^[^ ]/p' "$sys_yaml" | awk -F': ' '/^  recovery_max_attempts:/{print $2; exit}' | sed 's/ *#.*//' | xargs)
+        _recovery_max_attempts="${_val:-2}"
+        _val=$(sed -n '/^health:/,/^[^ ]/p' "$sys_yaml" | awk -F': ' '/^  recovery_wait:/{print $2; exit}' | sed 's/ *#.*//' | xargs)
+        _recovery_wait="${_val:-15}"
+    fi
+
+    local _startup_status="complete"
+    local _session_target="$SESSION_NAME:$TMUX_WINDOW_NAME"
+
+    # 全エージェントのリカバリチェック（リカバリ中のエラーで起動全体を止めない）
+    if cli_is_headless_mode; then
+        # ヘッドレス: PIDファイルベースでエージェントを列挙
+        local _total_agents=0
+        local -a _agent_indices=()
+        for _pid_file in "$IGNITE_RUNTIME_DIR"/state/.agent_pid_*; do
+            [[ -f "$_pid_file" ]] || continue
+            local _aidx
+            _aidx=$(basename "$_pid_file" | sed 's/\.agent_pid_//')
+            _agent_indices+=("$_aidx")
+            ((_total_agents++))
+        done
+
+        if [[ "$_total_agents" -gt 0 ]]; then
+            echo ""
+            print_info "ポスト起動チェック: ${_total_agents} エージェントを検証中..."
+
+            # ERR trap を一時退避してリカバリ中は無効化
+            trap - ERR
+
+            for _pidx in "${_agent_indices[@]}"; do
+                if _verify_agent_prompt "$_session_target" "$_pidx" 2>/dev/null; then
+                    continue
+                fi
+
+                # リカバリ対象
+                local _agent_name_recov
+                cli_load_agent_state "$_pidx"
+                _agent_name_recov="${_AGENT_NAME:-agent ${_pidx}}"
+                print_warning "agent ${_pidx} (${_agent_name_recov}) がスタック検出、リカバリ中..."
+
+                local _recovered=false
+                local _attempt=0
+                while [[ $_attempt -lt $_recovery_max_attempts ]]; do
+                    _attempt=$((_attempt + 1))
+                    print_info "  リカバリ試行 ${_attempt}/${_recovery_max_attempts}..."
+                    _kill_agent_process "$_pidx" || true
+                    sleep "$_recovery_wait"
+
+                    # エージェントタイプに応じた再起動（失敗しても続行）
+                    if [[ $_pidx -eq 0 ]]; then
+                        restart_leader_in_pane "$agent_mode" "$_gh_export" || true
+                    elif [[ $_pidx -ge 1 ]] && [[ $_pidx -le ${#SUB_LEADERS[@]} ]]; then
+                        local _sl_idx=$((_pidx - 1))
+                        local _sl_role="${SUB_LEADERS[$_sl_idx]}"
+                        local _sl_name="${SUB_LEADER_NAMES[$_sl_idx]}"
+                        restart_agent_in_pane "$_sl_role" "$_sl_name" "$_pidx" "$_gh_export" || true
+                    else
+                        local _ig_id=$((_pidx - ${#SUB_LEADERS[@]}))
+                        restart_ignitian_in_pane "$_ig_id" "$_pidx" "$_gh_export" || true
+                    fi
+
+                    sleep "$(get_delay leader_init 10)"
+
+                    if _verify_agent_prompt "$_session_target" "$_pidx" 2>/dev/null; then
+                        print_success "  agent ${_pidx} (${_agent_name_recov}) リカバリ成功"
+                        _recovered=true
+                        break
+                    fi
+                done
+
+                if [[ "$_recovered" != true ]]; then
+                    print_error "  agent ${_pidx} (${_agent_name_recov}) リカバリ失敗（${_recovery_max_attempts}回試行）"
+                    _startup_status="partial"
+                fi
+            done
+
+            # ERR trap を復元
+            trap 'print_error "エラーが発生しました (line $LINENO)"' ERR
+        fi
+    else
+        # TUIモード: tmux pane ベースでリカバリチェック
+        local _total_panes
+        _total_panes=$(tmux list-panes -t "$_session_target" -F '#{pane_index}' 2>/dev/null | wc -l)
+        if [[ "$_total_panes" -gt 0 ]]; then
+            echo ""
+            print_info "ポスト起動チェック: ${_total_panes} pane を検証中..."
+
+            # ERR trap を一時退避してリカバリ中は無効化
+            trap - ERR
+
+            for ((_pidx=0; _pidx<_total_panes; _pidx++)); do
+                if _verify_agent_prompt "$_session_target" "$_pidx" 2>/dev/null; then
+                    continue
+                fi
+
+                # リカバリ対象
+                local _agent_name_recov
+                _agent_name_recov=$(tmux show-options -t "${_session_target}.${_pidx}" -v @agent_name 2>/dev/null || echo "pane ${_pidx}")
+                print_warning "pane ${_pidx} (${_agent_name_recov}) がスタック検出、リカバリ中..."
+
+                local _recovered=false
+                local _attempt=0
+                while [[ $_attempt -lt $_recovery_max_attempts ]]; do
+                    _attempt=$((_attempt + 1))
+                    print_info "  リカバリ試行 ${_attempt}/${_recovery_max_attempts}..."
+                    _kill_pane_process "$_session_target" "$_pidx" || true
+                    sleep "$_recovery_wait"
+
+                    # pane タイプに応じた再起動（失敗しても続行）
+                    if [[ $_pidx -eq 0 ]]; then
+                        restart_leader_in_pane "$agent_mode" "$_gh_export" || true
+                    elif [[ $_pidx -ge 1 ]] && [[ $_pidx -le ${#SUB_LEADERS[@]} ]]; then
+                        local _sl_idx=$((_pidx - 1))
+                        local _sl_role="${SUB_LEADERS[$_sl_idx]}"
+                        local _sl_name="${SUB_LEADER_NAMES[$_sl_idx]}"
+                        restart_agent_in_pane "$_sl_role" "$_sl_name" "$_pidx" "$_gh_export" || true
+                    else
+                        local _ig_id=$((_pidx - ${#SUB_LEADERS[@]}))
+                        restart_ignitian_in_pane "$_ig_id" "$_pidx" "$_gh_export" || true
+                    fi
+
+                    sleep "$(get_delay leader_init 10)"
+
+                    if _verify_agent_prompt "$_session_target" "$_pidx" 2>/dev/null; then
+                        print_success "  pane ${_pidx} (${_agent_name_recov}) リカバリ成功"
+                        _recovered=true
+                        break
+                    fi
+                done
+
+                if [[ "$_recovered" != true ]]; then
+                    print_error "  pane ${_pidx} (${_agent_name_recov}) リカバリ失敗（${_recovery_max_attempts}回試行）"
+                    _startup_status="partial"
+                fi
+            done
+
+            # ERR trap を復元
+            trap 'print_error "エラーが発生しました (line $LINENO)"' ERR
+        fi
+    fi
+
     # ランタイム情報ファイルを作成（IGNITIANs数などを記録）
     print_info "ランタイム情報を保存中..."
+    local _runtime_headless=""
+    if cli_is_headless_mode; then
+        _runtime_headless=$'\n  headless: true'
+    fi
     cat > "$IGNITE_RUNTIME_DIR/runtime.yaml" <<EOF
 # IGNITE ランタイム情報（自動生成）
 # このファイルはシステム起動時に自動的に更新されます
@@ -529,6 +866,7 @@ system:
   agent_mode: "${agent_mode}"
   session_name: "${SESSION_NAME}"
   workspace_dir: "${WORKSPACE_DIR}"
+  startup_status: "${_startup_status}"${_runtime_headless}
 
 ignitians:
   count: ${actual_ignitian_count}
@@ -616,15 +954,27 @@ EOF
     echo ""
     print_header "起動完了"
     echo ""
-    echo "次のステップ:"
-    echo -e "  1. tmuxセッションに接続: ${YELLOW}./scripts/ignite attach${NC}"
-    echo -e "  2. ダッシュボード確認: ${YELLOW}./scripts/ignite status${NC}"
-    echo -e "  3. タスク投入: ${YELLOW}./scripts/ignite plan \"目標\"${NC}"
-    echo ""
-    echo "tmuxセッション操作:"
-    echo -e "  - デタッチ: ${YELLOW}Ctrl+b d${NC}"
-    echo -e "  - セッション終了: ${YELLOW}./scripts/ignite stop${NC}"
-    echo ""
+    if cli_is_headless_mode; then
+        echo "次のステップ:"
+        echo -e "  1. エージェントに接続: ${YELLOW}ignite attach <agent>${NC}"
+        echo -e "  2. ダッシュボード確認: ${YELLOW}ignite status${NC}"
+        echo -e "  3. ログ確認: ${YELLOW}ignite logs${NC}"
+        echo -e "  4. タスク投入: ${YELLOW}ignite plan \"目標\"${NC}"
+        echo ""
+        echo "システム操作:"
+        echo -e "  - セッション終了: ${YELLOW}ignite stop${NC}"
+        echo ""
+    else
+        echo "次のステップ:"
+        echo -e "  1. tmuxセッションに接続: ${YELLOW}./scripts/ignite attach${NC}"
+        echo -e "  2. ダッシュボード確認: ${YELLOW}./scripts/ignite status${NC}"
+        echo -e "  3. タスク投入: ${YELLOW}./scripts/ignite plan \"目標\"${NC}"
+        echo ""
+        echo "tmuxセッション操作:"
+        echo -e "  - デタッチ: ${YELLOW}Ctrl+b d${NC}"
+        echo -e "  - セッション終了: ${YELLOW}./scripts/ignite stop${NC}"
+        echo ""
+    fi
 
     # GitHub Watcher の起動判定
     local start_watcher=false
@@ -683,7 +1033,10 @@ EOF
     fi
 
     # 自動アタッチ（対話環境のみ）
-    if [[ "$no_attach" == false ]] && [[ -t 0 ]]; then
+    if cli_is_headless_mode; then
+        # ヘッドレス: tmux attach は不要
+        print_info "ヘッドレスモードで起動完了。ignite attach <agent> で接続できます。"
+    elif [[ "$no_attach" == false ]] && [[ -t 0 ]]; then
         read -p "tmuxセッションにアタッチしますか? (Y/n): " -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Nn]$ ]]; then

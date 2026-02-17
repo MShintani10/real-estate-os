@@ -107,10 +107,19 @@ check_dependencies() {
     fi
 
     # プロバイダーに応じた必須コマンドリスト
-    local required_cmds="tmux"
+    local required_cmds=""
     case "$cli_provider" in
-        opencode) required_cmds="tmux opencode" ;;
-        *)        required_cmds="tmux opencode" ;;
+        opencode)
+            # opencode (headless) → tmux 不要、curl/jq 必須
+            required_cmds="opencode curl jq"
+            ;;
+        claude)
+            # claude (TUI) → tmux 必須
+            required_cmds="tmux claude"
+            ;;
+        *)
+            required_cmds="tmux opencode"
+            ;;
     esac
 
     for cmd in $required_cmds; do
@@ -135,6 +144,12 @@ check_dependencies() {
                     ;;
                 opencode)
                     echo "  - opencode: https://opencode.ai/"
+                    ;;
+                curl)
+                    echo "  - curl: sudo apt install curl (Ubuntu) / brew install curl (macOS)"
+                    ;;
+                jq)
+                    echo "  - jq: sudo apt install jq (Ubuntu) / brew install jq (macOS)"
                     ;;
                 *) ;;
             esac

@@ -115,8 +115,28 @@ cmd_stop() {
     save_cost_history
 
     # セッション終了
-    print_warning "tmuxセッションを終了中..."
-    tmux kill-session -t "$SESSION_NAME"
+    if cli_is_headless_mode; then
+        # ヘッドレス: PID ベースでエージェント停止
+        print_warning "エージェントプロセスを停止中..."
+        for pid_file in "$IGNITE_RUNTIME_DIR/state"/.agent_pid_*; do
+            [[ -f "$pid_file" ]] || continue
+            local pid
+            pid=$(cat "$pid_file" 2>/dev/null || true)
+            if [[ -n "$pid" ]] && _validate_pid "$pid" "opencode serve"; then
+                kill "$pid" 2>/dev/null || true
+                local i
+                for i in {1..6}; do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
+                kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null || true
+            fi
+            rm -f "$pid_file"
+        done
+        rm -f "$IGNITE_RUNTIME_DIR/state"/.agent_{port,session,name}_*
+        rm -f "$IGNITE_RUNTIME_DIR/state"/.send_lock_*
+        print_success "エージェントプロセスを停止しました"
+    else
+        print_warning "tmuxセッションを終了中..."
+        tmux kill-session -t "$SESSION_NAME"
+    fi
 
     # セッション情報ファイルを削除
     rm -f "$IGNITE_CONFIG_DIR/sessions/${SESSION_NAME}.yaml"

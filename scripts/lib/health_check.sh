@@ -208,6 +208,37 @@ check_agent_health() {
     local pane_index="$2"
     local expected_name="$3"
 
+    if cli_is_headless_mode; then
+        # ヘッドレス: PID + HTTP ヘルスチェック
+        local state_dir="$IGNITE_RUNTIME_DIR/state"
+        local pid
+        pid=$(cat "${state_dir}/.agent_pid_${pane_index}" 2>/dev/null || true)
+
+        # Layer 1: PID 生存チェック
+        if [[ -z "$pid" ]] || ! kill -0 "$pid" 2>/dev/null; then
+            echo "missing"
+            return
+        fi
+
+        # Layer 2: ステートファイル存在チェック
+        local agent_name
+        agent_name=$(cat "${state_dir}/.agent_name_${pane_index}" 2>/dev/null || true)
+
+        # Layer 3: HTTP ヘルスチェック
+        local port
+        port=$(cat "${state_dir}/.agent_port_${pane_index}" 2>/dev/null || true)
+        if [[ -n "$port" ]] && cli_check_server_health "$port"; then
+            if [[ -n "$agent_name" ]]; then
+                echo "healthy"
+            else
+                echo "starting"
+            fi
+        else
+            echo "stale"
+        fi
+        return
+    fi
+
     # tmux list-panes でペイン情報を取得
     local pane_info
     pane_info=$(tmux list-panes -t "${session}" \
@@ -238,6 +269,23 @@ check_agent_health() {
 # 戻り値(stdout): "pane_index:agent_name:status" 形式を1行ずつ出力
 get_all_agents_health() {
     local session="$1"
+
+    if cli_is_headless_mode; then
+        local state_dir="$IGNITE_RUNTIME_DIR/state"
+        for pid_file in "$state_dir"/.agent_pid_*; do
+            [[ -f "$pid_file" ]] || continue
+            local idx
+            idx=$(basename "$pid_file" | sed 's/^\.agent_pid_//')
+            local agent_name
+            agent_name=$(cat "${state_dir}/.agent_name_${idx}" 2>/dev/null || echo "unknown")
+            [[ -z "$agent_name" ]] && agent_name="unknown"
+
+            local status
+            status=$(check_agent_health "$session" "$idx" "$agent_name")
+            echo "${idx}:${agent_name}:${status}"
+        done
+        return
+    fi
 
     # 方式C: tmux list-panes 一括取得 + ループ判定
     local pane_data

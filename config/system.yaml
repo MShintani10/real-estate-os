@@ -45,5 +45,13 @@ defaults:
   task_timeout: 300  # seconds
   worker_count: 3    # IGNITIANs並列数
 
+health:
+  check_interval: 60       # ヘルスチェック間隔（秒）
+  recovery_enabled: true   # 自動リカバリの有効/無効
+  recovery_max_attempts: 2 # 起動時リカバリの最大試行回数
+  recovery_wait: 15        # リカバリ試行前の待機（秒）
+  max_restart: 3           # queue_monitor のランタイム再起動上限
+  init_timeout: 300        # 初期化未完了のタイムアウト（秒、デフォルト5分）
+
 insights:
   contribute_upstream: true  # false にすると IGNITE 本体リポへの改善 Issue 起票をスキップ

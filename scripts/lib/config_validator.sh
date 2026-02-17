@@ -236,8 +236,10 @@ validate_system_yaml() {
 
     echo "[INFO] 検証中: $(basename "$file")" >&2
 
-    # tmux セクション
-    validate_required "$file" ".tmux.window_name"
+    # tmux セクション（ヘッドレスモードではスキップ）
+    if ! declare -f cli_is_headless_mode &>/dev/null || ! cli_is_headless_mode; then
+        validate_required "$file" ".tmux.window_name"
+    fi
 
     # delays セクション (9)
     local delay_keys=(

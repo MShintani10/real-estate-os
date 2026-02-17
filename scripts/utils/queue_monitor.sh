@@ -23,9 +23,11 @@
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../lib/core.sh"
-source "${SCRIPT_DIR}/../lib/cli_provider.sh"
-source "${SCRIPT_DIR}/../lib/health_check.sh"
+LIB_DIR="${SCRIPT_DIR}/../lib"
+source "${LIB_DIR}/core.sh"
+source "${LIB_DIR}/cli_provider.sh"
+source "${LIB_DIR}/health_check.sh"
+source "${LIB_DIR}/agent.sh"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [[ -n "${WORKSPACE_DIR:-}" ]] && setup_workspace_config "$WORKSPACE_DIR"
 
@@ -125,6 +127,31 @@ MONITOR_PROGRESS_FILE="${IGNITE_RUNTIME_DIR}/state/queue_monitor_progress.log"
 # CLI プロバイダー設定を読み込み（submit keys 判定に必要）
 cli_load_config 2>/dev/null || true
 
+# ヘルスチェック/自動リカバリ設定
+HEALTH_CHECK_INTERVAL=60
+HEALTH_RECOVERY_ENABLED=true
+HEALTH_MAX_RESTART=3
+HEALTH_INIT_TIMEOUT=300
+_load_health_config() {
+    local sys_yaml="${IGNITE_CONFIG_DIR}/system.yaml"
+    if [[ -f "$sys_yaml" ]]; then
+        # health: セクション下のネストされたキーを sed/awk で抽出（yaml_get はネストに非対応）
+        local val
+        val=$(sed -n '/^health:/,/^[^ ]/p' "$sys_yaml" | awk -F': ' '/^  check_interval:/{print $2; exit}' | sed 's/ *#.*//' | xargs)
+        HEALTH_CHECK_INTERVAL="${val:-60}"
+
+        val=$(sed -n '/^health:/,/^[^ ]/p' "$sys_yaml" | awk -F': ' '/^  recovery_enabled:/{print $2; exit}' | sed 's/ *#.*//' | xargs)
+        HEALTH_RECOVERY_ENABLED="${val:-true}"
+
+        val=$(sed -n '/^health:/,/^[^ ]/p' "$sys_yaml" | awk -F': ' '/^  max_restart:/{print $2; exit}' | sed 's/ *#.*//' | xargs)
+        HEALTH_MAX_RESTART="${val:-3}"
+
+        val=$(sed -n '/^health:/,/^[^ ]/p' "$sys_yaml" | awk -F': ' '/^  init_timeout:/{print $2; exit}' | sed 's/ *#.*//' | xargs)
+        HEALTH_INIT_TIMEOUT="${val:-300}"
+    fi
+}
+_load_health_config
+
 # tmux window名を system.yaml から取得
 TMUX_WINDOW_NAME=$(sed -n '/^tmux:/,/^[^ ]/p' "$IGNITE_CONFIG_DIR/system.yaml" 2>/dev/null \
     | awk -F': ' '/^  window_name:/{print $2; exit}' | tr -d '"' | tr -d "'")
@@ -145,6 +172,313 @@ _resolve_task_timeout() {
         _TASK_TIMEOUT="${RETRY_TIMEOUT:-300}"
     fi
     echo "$_TASK_TIMEOUT"
+}
+
+# =============================================================================
+# エージェント自動リカバリ
+# =============================================================================
+
+# pane index → role 名マッピング
+_resolve_role_from_pane() {
+    local idx="$1"
+    case "$idx" in
+        0) echo "leader" ;;
+        1) echo "strategist" ;;
+        2) echo "architect" ;;
+        3) echo "evaluator" ;;
+        4) echo "coordinator" ;;
+        5) echo "innovator" ;;
+        *) echo "ignitian_$((idx - 5))" ;;
+    esac
+}
+
+# エージェントのヘルスチェックと自動リカバリ
+_check_and_recover_agents() {
+    [[ "$HEALTH_RECOVERY_ENABLED" == "true" ]] || return 0
+
+    local session_target="${TMUX_SESSION}:${TMUX_WINDOW_NAME}"
+
+    # SESSION_NAME を設定（リカバリ関数が参照する）
+    SESSION_NAME="$TMUX_SESSION"
+
+    # runtime.yaml から agent_mode を取得
+    local _agent_mode="full"
+    local _runtime_yaml="$IGNITE_RUNTIME_DIR/runtime.yaml"
+    if [[ -f "$_runtime_yaml" ]]; then
+        _agent_mode=$(grep -m1 '^\s*agent_mode:' "$_runtime_yaml" 2>/dev/null \
+            | sed 's/^.*agent_mode:[[:space:]]*//' | tr -d '"' | tr -d "'")
+        _agent_mode="${_agent_mode:-full}"
+    fi
+
+    # 全エージェントのヘルスチェック
+    local health_data
+    health_data=$(get_all_agents_health "$session_target" 2>/dev/null || true)
+    [[ -n "$health_data" ]] || return 0
+
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        local idx agent_name status
+        IFS=':' read -r idx agent_name status <<< "$line"
+
+        # crashed / missing のみリカバリ対象
+        case "$status" in
+            crashed|missing) ;;
+            *) continue ;;
+        esac
+
+        local state_dir="$IGNITE_RUNTIME_DIR/state"
+        local lock_file="$state_dir/.recovery_pane_${idx}.lock"
+        local restart_count_file="$state_dir/.restart_count_pane_${idx}"
+
+        # 並行リカバリ防止
+        if [[ -f "$lock_file" ]]; then
+            continue
+        fi
+
+        # 再起動カウント確認
+        local restart_count=0
+        if [[ -f "$restart_count_file" ]]; then
+            restart_count=$(cat "$restart_count_file" 2>/dev/null || echo "0")
+        fi
+        if [[ "$restart_count" -ge "$HEALTH_MAX_RESTART" ]]; then
+            continue  # 打ち止め
+        fi
+
+        # バックグラウンドでリカバリ実行
+        (
+            touch "$lock_file"
+            trap 'rm -f "$lock_file"' EXIT
+
+            log_warn "pane ${idx} (${agent_name}) ${status} 検出、リカバリ中..."
+
+            _kill_agent_process "$idx" "$session_target"
+            sleep 5
+
+            local role
+            role=$(_resolve_role_from_pane "$idx")
+
+            case "$role" in
+                leader)
+                    restart_leader_in_pane "$_agent_mode" ""
+                    ;;
+                strategist|architect|evaluator|coordinator|innovator)
+                    local _sl_name="$agent_name"
+                    restart_agent_in_pane "$role" "$_sl_name" "$idx" ""
+                    ;;
+                ignitian_*)
+                    local _ig_id="${role#ignitian_}"
+                    restart_ignitian_in_pane "$_ig_id" "$idx" ""
+                    ;;
+            esac
+
+            # 再起動カウント更新
+            echo "$((restart_count + 1))" > "$restart_count_file"
+
+            log_info "pane ${idx} (${agent_name}) リカバリ完了"
+
+            # Leader に通知（Leader 自身が対象でない場合）
+            if [[ "$idx" -ne 0 ]]; then
+                send_to_agent "leader" \
+                    "エージェント ${agent_name} (pane ${idx}) が ${status} 状態のため自動リカバリを実行しました。確認してください。" \
+                    2>/dev/null || true
+            fi
+        ) &
+    done <<< "$health_data"
+}
+
+# 初期化フラグチェック + コンテンツハッシュ比較による非アクティブ検出
+_check_init_and_stale_agents() {
+    [[ "$HEALTH_RECOVERY_ENABLED" == "true" ]] || return 0
+
+    local session_target="${TMUX_SESSION}:${TMUX_WINDOW_NAME}"
+    local now_epoch
+    now_epoch=$(date +%s)
+    local state_dir="$IGNITE_RUNTIME_DIR/state"
+
+    SESSION_NAME="$TMUX_SESSION"
+
+    local _agent_mode="full"
+    local _runtime_yaml="$IGNITE_RUNTIME_DIR/runtime.yaml"
+    if [[ -f "$_runtime_yaml" ]]; then
+        _agent_mode=$(grep -m1 '^\s*agent_mode:' "$_runtime_yaml" 2>/dev/null \
+            | sed 's/^.*agent_mode:[[:space:]]*//' | tr -d '"' | tr -d "'")
+        _agent_mode="${_agent_mode:-full}"
+    fi
+
+    local pane_indices
+    if cli_is_headless_mode; then
+        # ヘッドレス: PID ファイルからインデックスを列挙
+        pane_indices=""
+        for pid_file in "$IGNITE_RUNTIME_DIR/state"/.agent_pid_*; do
+            [[ -f "$pid_file" ]] || continue
+            local _idx
+            _idx=$(basename "$pid_file" | sed 's/^\.agent_pid_//')
+            pane_indices+="${_idx}"$'\n'
+        done
+    else
+        pane_indices=$(tmux list-panes -t "$session_target" -F '#{pane_index}' 2>/dev/null || true)
+    fi
+    [[ -n "$pane_indices" ]] || return 0
+
+    while IFS= read -r idx; do
+        [[ -z "$idx" ]] && continue
+        local lock_file="$state_dir/.recovery_pane_${idx}.lock"
+        [[ -f "$lock_file" ]] && continue
+
+        local init_flag="$state_dir/.agent_initialized_pane_${idx}"
+        local hash_file="$state_dir/.pane_content_hash_${idx}"
+        local restart_count_file="$state_dir/.restart_count_pane_${idx}"
+
+        # 再起動カウント確認
+        local restart_count=0
+        if [[ -f "$restart_count_file" ]]; then
+            restart_count=$(cat "$restart_count_file" 2>/dev/null || echo "0")
+        fi
+        [[ "$restart_count" -ge "$HEALTH_MAX_RESTART" ]] && continue
+
+        # 初期化未完了検出
+        if [[ ! -f "$init_flag" ]]; then
+            local elapsed=$(( now_epoch - _MONITOR_START_EPOCH ))
+            if [[ $elapsed -lt $HEALTH_INIT_TIMEOUT ]]; then
+                continue  # まだタイムアウト前
+            fi
+
+            # ヘルスチェックで正常なら初期化フラグが無くてもスキップ
+            local _health _agent_name_for_health
+            if cli_is_headless_mode; then
+                _agent_name_for_health=$(cat "$IGNITE_RUNTIME_DIR/state/.agent_name_${idx}" 2>/dev/null || echo "unknown")
+            else
+                _agent_name_for_health=$(tmux show-options -t "${session_target}.${idx}" -v @agent_name 2>/dev/null || echo "unknown")
+            fi
+            _health=$(check_agent_health "$TMUX_SESSION" "$idx" "$_agent_name_for_health" 2>/dev/null || echo "unknown")
+            case "$_health" in
+                healthy|idle)
+                    # エージェントは正常稼働中 — フラグだけ作成してスキップ
+                    touch "$init_flag"
+                    continue
+                    ;;
+            esac
+
+            if cli_is_headless_mode; then
+                # ヘッドレス: HTTP ヘルスチェックで活動判定
+                cli_load_agent_state "$idx"
+                if [[ -n "${_AGENT_PORT:-}" ]] && cli_check_server_health "$_AGENT_PORT"; then
+                    touch "$init_flag"
+                    continue
+                fi
+            else
+                # capture-pane でコンテンツ量を確認
+                local captured
+                captured=$(tmux capture-pane -t "${session_target}.${idx}" -p -S -50 2>/dev/null || true)
+                local _content_lines
+                _content_lines=$(echo "$captured" | grep -c '[^[:space:]]' || true)
+                if [[ "$_content_lines" -ge 5 ]]; then
+                    # TUI に十分なコンテンツあり → 活動中、フラグ作成してスキップ
+                    touch "$init_flag"
+                    continue
+                fi
+            fi
+
+            # コンテンツが少なすぎる → リカバリ
+            _do_recovery_in_background "$idx" "$state_dir" "$session_target" "$_agent_mode" &
+            continue
+        fi
+
+        # コンテンツハッシュ比較（初期化済みのエージェント対象）
+        if cli_is_headless_mode; then
+            # ヘッドレス: HTTP ヘルスチェックで活動判定
+            cli_load_agent_state "$idx"
+            if [[ -n "${_AGENT_PORT:-}" ]] && cli_check_server_health "$_AGENT_PORT"; then
+                touch "$init_flag" 2>/dev/null || true
+            fi
+            continue
+        fi
+
+        local captured
+        captured=$(tmux capture-pane -t "${session_target}.${idx}" -p -S -30 2>/dev/null || true)
+        local current_hash
+        current_hash=$(echo "$captured" | md5sum | awk '{print $1}')
+
+        if [[ -f "$hash_file" ]]; then
+            local prev_hash prev_epoch
+            IFS=' ' read -r prev_hash prev_epoch < "$hash_file"
+            if [[ "$current_hash" == "$prev_hash" ]]; then
+                local stale_elapsed=$(( now_epoch - prev_epoch ))
+                if [[ $stale_elapsed -ge $(( HEALTH_CHECK_INTERVAL * 2 )) ]]; then
+                    # ハッシュ同一 + 一定時間経過 → submit 再送信を試行
+                    eval "tmux send-keys -t '${session_target}.${idx}' $(cli_get_submit_keys)" 2>/dev/null || true
+                    # ハッシュをリセットして次回再チェック
+                    echo "$current_hash $now_epoch" > "$hash_file"
+                fi
+            else
+                # ハッシュ変化あり → 正常、更新
+                echo "$current_hash $now_epoch" > "$hash_file"
+            fi
+        else
+            echo "$current_hash $now_epoch" > "$hash_file"
+        fi
+    done <<< "$pane_indices"
+}
+
+# バックグラウンドリカバリ実行
+_do_recovery_in_background() {
+    local idx="$1"
+    local state_dir="$2"
+    local session_target="$3"
+    local _agent_mode="$4"
+
+    local lock_file="$state_dir/.recovery_pane_${idx}.lock"
+    local restart_count_file="$state_dir/.restart_count_pane_${idx}"
+
+    touch "$lock_file"
+    trap 'rm -f "$lock_file"' EXIT
+
+    local agent_name
+    agent_name=$(tmux show-options -t "${session_target}.${idx}" -v @agent_name 2>/dev/null || echo "pane ${idx}")
+
+    log_warn "pane ${idx} (${agent_name}) 初期化未完了、リカバリ中..."
+
+    _kill_pane_process "$session_target" "$idx"
+    sleep 5
+
+    local role
+    role=$(_resolve_role_from_pane "$idx")
+
+    case "$role" in
+        leader)
+            restart_leader_in_pane "$_agent_mode" ""
+            ;;
+        strategist|architect|evaluator|coordinator|innovator)
+            restart_agent_in_pane "$role" "$agent_name" "$idx" ""
+            ;;
+        ignitian_*)
+            local _ig_id="${role#ignitian_}"
+            restart_ignitian_in_pane "$_ig_id" "$idx" ""
+            ;;
+    esac
+
+    local restart_count=0
+    [[ -f "$restart_count_file" ]] && restart_count=$(cat "$restart_count_file" 2>/dev/null || echo "0")
+    echo "$((restart_count + 1))" > "$restart_count_file"
+
+    log_info "pane ${idx} (${agent_name}) リカバリ完了"
+
+    if [[ "$idx" -ne 0 ]]; then
+        send_to_agent "leader" \
+            "エージェント ${agent_name} (pane ${idx}) の初期化未完了のため自動リカバリを実行しました。確認してください。" \
+            2>/dev/null || true
+    fi
+}
+
+# 初期化フラグを作成（初回メッセージ配信成功時に呼び出し）
+_mark_agent_initialized() {
+    local pane_idx="$1"
+    local state_dir="$IGNITE_RUNTIME_DIR/state"
+    local flag_file="$state_dir/.agent_initialized_pane_${pane_idx}"
+    if [[ ! -f "$flag_file" ]]; then
+        touch "$flag_file"
+        log_info "pane ${pane_idx} 初期化フラグを作成しました"
+    fi
 }
 
 # =============================================================================
@@ -217,7 +551,13 @@ _write_task_health_snapshot() {
     timestamp=$(date -Iseconds)
 
     local agents_json="[]"
-    if tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
+    if cli_is_headless_mode; then
+        local leader_pid
+        leader_pid=$(cat "$IGNITE_RUNTIME_DIR/state/.agent_pid_0" 2>/dev/null || true)
+        if [[ -n "$leader_pid" ]] && kill -0 "$leader_pid" 2>/dev/null; then
+            agents_json=$(get_agents_health_json "$TMUX_SESSION:$TMUX_WINDOW_NAME" 2>/dev/null || echo "[]")
+        fi
+    elif tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
         agents_json=$(get_agents_health_json "$TMUX_SESSION:$TMUX_WINDOW_NAME" 2>/dev/null || echo "[]")
     fi
 
@@ -481,6 +821,38 @@ send_to_agent() {
             ;;
     esac
 
+    # リカバリ中の配信スキップ
+    local _recovery_lock="$IGNITE_RUNTIME_DIR/state/.recovery_pane_${pane_index}.lock"
+    if [[ -f "$_recovery_lock" ]]; then
+        log_warn "pane $pane_index はリカバリ中のため配信スキップ: $agent"
+        return 1
+    fi
+
+    if cli_is_headless_mode; then
+        local lock_file="$IGNITE_RUNTIME_DIR/state/.send_lock_${pane_index}"
+        (
+            flock -w 30 200 || { log_warn "ロック取得タイムアウト: agent=$agent"; return 1; }
+            cli_load_agent_state "$pane_index"
+            if [[ -z "${_AGENT_PORT:-}" ]] || [[ -z "${_AGENT_SESSION_ID:-}" ]]; then
+                log_warn "エージェントステートが見つかりません: $agent (idx=$pane_index)"
+                return 1
+            fi
+            if ! cli_check_server_health "$_AGENT_PORT"; then
+                log_warn "エージェントが応答しません: $agent (port=$_AGENT_PORT)"
+                return 1
+            fi
+            if cli_send_message "$_AGENT_PORT" "$_AGENT_SESSION_ID" "$message"; then
+                log_success "エージェント $agent (idx $pane_index) にメッセージを送信しました"
+                _mark_agent_initialized "$pane_index"
+                return 0
+            else
+                log_warn "メッセージ送信に失敗: $agent"
+                return 1
+            fi
+        ) 200>"$lock_file"
+        return $?
+    fi
+
     # tmux でメッセージを送信（ペイン指定）
     if tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
         # ペインにメッセージを送信
@@ -495,6 +867,8 @@ send_to_agent() {
             _submit_keys=$(cli_get_submit_keys 2>/dev/null || echo "C-m")
             eval "tmux send-keys -t '$target' $_submit_keys" 2>/dev/null
             log_success "エージェント $agent (pane $pane_index) にメッセージを送信しました"
+            # 初期化フラグを作成（初回配信成功時）
+            _mark_agent_initialized "$pane_index"
             return 0
         else
             log_warn "ペイン $pane_index への送信に失敗しました（ペインが存在しない可能性）"
@@ -1172,29 +1546,55 @@ monitor_queues() {
     local missing_session_first_at=0
     local last_heartbeat_epoch=0
     local last_progress_epoch=0
+    local last_health_check_epoch=0
 
     while [[ "$_SHUTDOWN_REQUESTED" != true ]]; do
-        # tmuxセッション生存チェック（誤検知対策）
-        if ! tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
-            local now_epoch
-            now_epoch=$(date +%s)
-            if [[ $missing_session_count -eq 0 ]]; then
-                missing_session_first_at=$now_epoch
+        # セッション/プロセス生存チェック（誤検知対策）
+        if cli_is_headless_mode; then
+            local leader_pid
+            leader_pid=$(cat "$IGNITE_RUNTIME_DIR/state/.agent_pid_0" 2>/dev/null || true)
+            if [[ -z "$leader_pid" ]] || ! kill -0 "$leader_pid" 2>/dev/null; then
+                local now_epoch
+                now_epoch=$(date +%s)
+                if [[ $missing_session_count -eq 0 ]]; then
+                    missing_session_first_at=$now_epoch
+                fi
+                missing_session_count=$((missing_session_count + 1))
+                local elapsed=$((now_epoch - missing_session_first_at))
+                log_warn "Leader プロセス未検出: ${missing_session_count}/${MISSING_SESSION_THRESHOLD} (経過 ${elapsed}s)"
+                if [[ $elapsed -ge $MISSING_SESSION_GRACE ]] && [[ $missing_session_count -ge $MISSING_SESSION_THRESHOLD ]]; then
+                    log_error "Leader プロセス未検出が継続（猶予 ${MISSING_SESSION_GRACE}s 超過）"
+                    _EXIT_CODE=1
+                    _SHUTDOWN_REQUESTED=true
+                    break
+                fi
+                sleep 1
+                continue
             fi
-            missing_session_count=$((missing_session_count + 1))
-            local elapsed=$((now_epoch - missing_session_first_at))
-            log_warn "tmux セッション未検出: ${missing_session_count}/${MISSING_SESSION_THRESHOLD} (経過 ${elapsed}s)"
-            if [[ $elapsed -ge $MISSING_SESSION_GRACE ]] && [[ $missing_session_count -ge $MISSING_SESSION_THRESHOLD ]]; then
-                log_error "tmux セッション未検出が継続（猶予 ${MISSING_SESSION_GRACE}s 超過）"
-                _EXIT_CODE=1
-                _SHUTDOWN_REQUESTED=true
-                break
+            missing_session_count=0
+            missing_session_first_at=0
+        else
+            if ! tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
+                local now_epoch
+                now_epoch=$(date +%s)
+                if [[ $missing_session_count -eq 0 ]]; then
+                    missing_session_first_at=$now_epoch
+                fi
+                missing_session_count=$((missing_session_count + 1))
+                local elapsed=$((now_epoch - missing_session_first_at))
+                log_warn "tmux セッション未検出: ${missing_session_count}/${MISSING_SESSION_THRESHOLD} (経過 ${elapsed}s)"
+                if [[ $elapsed -ge $MISSING_SESSION_GRACE ]] && [[ $missing_session_count -ge $MISSING_SESSION_THRESHOLD ]]; then
+                    log_error "tmux セッション未検出が継続（猶予 ${MISSING_SESSION_GRACE}s 超過）"
+                    _EXIT_CODE=1
+                    _SHUTDOWN_REQUESTED=true
+                    break
+                fi
+                sleep 1
+                continue
             fi
-            sleep 1
-            continue
+            missing_session_count=0
+            missing_session_first_at=0
         fi
-        missing_session_count=0
-        missing_session_first_at=0
 
         # Leader キュー
         scan_queue "$IGNITE_RUNTIME_DIR/queue/leader" "leader"
@@ -1230,9 +1630,16 @@ monitor_queues() {
 
         _write_task_health_snapshot || true
 
-        # heartbeat / progress
+        # ヘルスチェック + 自動リカバリ
         local now_epoch
         now_epoch=$(date +%s)
+        if [[ $((now_epoch - last_health_check_epoch)) -ge $HEALTH_CHECK_INTERVAL ]]; then
+            last_health_check_epoch=$now_epoch
+            _check_and_recover_agents || true
+            _check_init_and_stale_agents || true
+        fi
+
+        # heartbeat / progress
         if [[ $((now_epoch - last_heartbeat_epoch)) -ge $HEARTBEAT_INTERVAL ]]; then
             _write_heartbeat || true
             last_heartbeat_epoch=$now_epoch
@@ -1254,6 +1661,7 @@ monitor_queues() {
             _RELOAD_REQUESTED=false
             log_info "設定リロード実行中..."
             load_config || log_warn "設定リロード失敗"
+            _load_health_config
             log_info "設定リロード完了"
         fi
 
@@ -1322,17 +1730,22 @@ main() {
         esac
     done
 
-    if [[ -z "$TMUX_SESSION" ]]; then
-        log_error "tmux セッション名が指定されていません"
-        echo "  -s または --session オプションで指定してください"
-        echo "  または IGNITE_TMUX_SESSION 環境変数を設定してください"
-        exit 1
-    fi
+    if cli_is_headless_mode; then
+        # ヘッドレス: TMUX_SESSION は不要だがログ用に設定
+        TMUX_SESSION="${TMUX_SESSION:-headless}"
+    else
+        if [[ -z "$TMUX_SESSION" ]]; then
+            log_error "tmux セッション名が指定されていません"
+            echo "  -s または --session オプションで指定してください"
+            echo "  または IGNITE_TMUX_SESSION 環境変数を設定してください"
+            exit 1
+        fi
 
-    # tmux セッションの存在確認
-    if ! tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
-        log_error "tmux セッションが見つかりません: $TMUX_SESSION"
-        exit 1
+        # tmux セッションの存在確認
+        if ! tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
+            log_error "tmux セッションが見つかりません: $TMUX_SESSION"
+            exit 1
+        fi
     fi
 
     # 二重起動防止ロック

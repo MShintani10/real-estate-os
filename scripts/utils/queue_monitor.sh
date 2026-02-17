@@ -968,7 +968,11 @@ normalize_filename() {
         if [[ -n "$epoch_sec" ]]; then
             # マイクロ秒部分はファイルのハッシュから生成（ユニーク性確保）
             local micro
-            micro=$(echo "${file}${yaml_ts}" | md5sum | tr -dc '0-9' | head -c 6)
+            if command -v md5sum &>/dev/null; then
+                micro=$(echo "${file}${yaml_ts}" | md5sum | tr -dc '0-9' | head -c 6)
+            else
+                micro=$(echo "${file}${yaml_ts}" | md5 -r | tr -dc '0-9' | head -c 6)
+            fi
             epoch_usec="${epoch_sec}${micro}"
         fi
     fi

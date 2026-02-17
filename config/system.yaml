@@ -20,8 +20,8 @@
 #     model: ollama/qwen3-coder:30b
 
 cli:
-  provider: opencode
-  model: openai/gpt-5.2-codex
+  provider: claude
+  model: claude-opus-4-6
 
 tmux:
   window_name: ignite

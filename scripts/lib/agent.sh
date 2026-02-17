@@ -65,7 +65,10 @@ start_agent_in_pane() {
     while [[ $retry -lt $max_retries ]]; do
         print_info "${name} を起動中... (試行 $((retry+1))/$max_retries)"
 
-        tmux set-option -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane" -p @agent_name "${name} (${role^})"
+        # ペイン作成
+        tmux split-window -t "$SESSION_NAME:$TMUX_WINDOW_NAME" -h
+        tmux select-layout -t "$SESSION_NAME:$TMUX_WINDOW_NAME" tiled
+        tmux set-option -t "$SESSION_NAME:$TMUX_WINDOW_NAME.$pane" -p @agent_name "${name} ($(echo "$role" | awk '{print toupper(substr($0,1,1)) substr($0,2)}'))"
 
         # ロール別の opencode.json を生成（OpenCode の場合、各エージェント固有の instructions を設定）
         cli_setup_project_config "$WORKSPACE_DIR" "$role" \
@@ -87,7 +90,7 @@ start_agent_in_pane() {
 
         # 起動確認（ヘルスチェック）
         local _health
-        _health=$(check_agent_health "$SESSION_NAME:$TMUX_WINDOW_NAME" "$pane" "${name} (${role^})")
+        _health=$(check_agent_health "$SESSION_NAME:$TMUX_WINDOW_NAME" "$pane" "${name} ($(echo "$role" | awk '{print toupper(substr($0,1,1)) substr($0,2)}'))")
         if [[ "$_health" != "missing" ]]; then
             # TUI 入力受付待機（OpenCode は TUI 描画完了まで入力不可）
             local _target="$SESSION_NAME:$TMUX_WINDOW_NAME.$pane"
@@ -99,7 +102,7 @@ start_agent_in_pane() {
             else
                 # opencode: instructions は opencode_{role}.json 経由で読み込み済み
                 tmux send-keys -l -t "$_target" \
-                    "あなたは${name}（${role^}）です。ワークスペースは $WORKSPACE_DIR です。起動時の初期化を行ってください。以降のメッセージ通知は queue_monitor が tmux 経由で送信します。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
+                    "あなたは${name}（$(echo "$role" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')）です。ワークスペースは $WORKSPACE_DIR です。起動時の初期化を行ってください。以降のメッセージ通知は queue_monitor が tmux 経由で送信します。instructions内の workspace/ は $WORKSPACE_DIR に、./scripts/utils/ は $IGNITE_SCRIPTS_DIR/utils/ に、config/ は $IGNITE_CONFIG_DIR/ に読み替えてください。"
             fi
             sleep "$(get_delay prompt_send 0.3)"
             eval "tmux send-keys -t \"$_target\" $(cli_get_submit_keys)"

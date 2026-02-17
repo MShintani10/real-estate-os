@@ -19,7 +19,11 @@
 # =============================================================================
 generate_session_id() {
     # プロジェクトパス + タイムスタンプから短いIDを生成
-    echo "ignite-$(echo "${PROJECT_ROOT}-$(date +%s)" | md5sum | cut -c1-4)"
+    if command -v md5sum &>/dev/null; then
+        echo "ignite-$(echo "${PROJECT_ROOT}-$(date +%s)" | md5sum | cut -c1-4)"
+    else
+        echo "ignite-$(echo "${PROJECT_ROOT}-$(date +%s)" | md5 -r | cut -c1-4)"
+    fi
 }
 
 # デフォルトのワークスペースパス

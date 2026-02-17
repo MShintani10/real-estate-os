@@ -28,6 +28,11 @@ cmd_stop() {
         esac
     done
 
+    # -w 指定があればワークスペース設定を先にロード（session_exists で state を参照するため）
+    if [[ -n "${WORKSPACE_DIR:-}" ]]; then
+        setup_workspace_config "$WORKSPACE_DIR"
+    fi
+
     # セッション名を設定
     setup_session_name
 

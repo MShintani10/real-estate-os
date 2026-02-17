@@ -729,7 +729,7 @@ EOF
             local _aidx
             _aidx=$(basename "$_pid_file" | sed 's/\.agent_pid_//')
             _agent_indices+=("$_aidx")
-            ((_total_agents++))
+            _total_agents=$((_total_agents + 1))
         done
 
         if [[ "$_total_agents" -gt 0 ]]; then

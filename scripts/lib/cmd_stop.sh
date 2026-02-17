@@ -123,13 +123,13 @@ cmd_stop() {
             rm -f "$pid_file"
         done
         # PID ファイルに載っていない孤立プロセスも掃除
-        local _orphan_pids
+        local _orphan_pids=""
         _orphan_pids=$(pgrep -f "opencode serve.*--print-logs" 2>/dev/null | while read -r _op; do
             # このワークスペースに属するプロセスのみ対象
             if grep -qsF "$WORKSPACE_DIR" "/proc/$_op/environ" 2>/dev/null; then
                 echo "$_op"
             fi
-        done)
+        done) || true
         if [[ -n "$_orphan_pids" ]]; then
             echo "$_orphan_pids" | xargs kill 2>/dev/null || true
             sleep 1

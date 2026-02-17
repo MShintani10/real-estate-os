@@ -1,14 +1,13 @@
 # Calendar App Sample
 
-公開可能な最小構成のサンプルです。
+React + PostgreSQL を Vercel で公開するためのサンプルです。
 
 ## Stack
-- Frontend: React (Vite)
-- Backend: Express (Node.js)
-- Database: PostgreSQL 16
-- CI: GitHub Actions + ShadowCI template
+- Frontend: React (Vite, static export)
+- API: Vercel Serverless Functions (`/api/*`)
+- Database: PostgreSQL (Vercel Postgres / Neon / Supabase など)
 
-## Run
+## Local Run
 ```bash
 cp .env.example .env
 docker compose up --build
@@ -18,8 +17,19 @@ docker compose up --build
 - API Health: http://localhost:3001/healthz
 - API Events: `GET/POST/DELETE /api/events`
 
-## Release Flow
-1. `npm install`
-2. `npm run lint && npm run test && npm run build`
-3. `git tag -a calendar-sample-v0.1.0 -m "release: calendar sample v0.1.0"`
-4. `git push origin main --tags`
+## Vercel Deploy
+1. PostgreSQL を用意し、接続文字列を取得
+2. Vercel Project の Environment Variables に `DATABASE_URL` を設定
+3. `samples/calendar-app` でデプロイ
+
+```bash
+cd samples/calendar-app
+vercel
+vercel --prod
+```
+
+## API Routes
+- `GET /api/healthz`
+- `GET /api/events?month=YYYY-MM`
+- `POST /api/events`
+- `DELETE /api/events/:id`

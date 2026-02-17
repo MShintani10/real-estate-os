@@ -37,7 +37,9 @@ export function App() {
     const [endTime, setEndTime] = useState("");
     const [notes, setNotes] = useState("");
 
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
+    const apiBaseUrl =
+        import.meta.env.VITE_API_BASE_URL ||
+        (window.location.hostname === "localhost" ? "http://localhost:3001" : "");
 
     const eventsByDate = useMemo(() => {
         const map = {};

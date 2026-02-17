@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/opt/homebrew/bin/bash
 # 外部リポジトリのセットアップスクリプト
 # clone, ブランチ作成, 作業ディレクトリ管理
 #

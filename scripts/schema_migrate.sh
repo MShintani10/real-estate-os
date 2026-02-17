@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/opt/homebrew/bin/bash
 # schema_migrate.sh - 冪等なスキーママイグレーション
 # PRAGMA user_version でバージョンを管理し、必要な場合のみ実行
 set -e

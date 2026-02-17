@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/opt/homebrew/bin/bash
 # Memory Insights CLI ツール
 # memoriesテーブルからデータ抽出・重複検索・Issue起票を行う
 #

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/opt/homebrew/bin/bash
 # GitHub イベント監視デーモン
 # 定期的にGitHub APIをポーリングしてイベントを検知し、
 # 新規イベントを workspace/queue/ に投入します

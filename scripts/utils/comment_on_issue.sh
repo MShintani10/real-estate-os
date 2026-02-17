@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/opt/homebrew/bin/bash
 # Issue/PR へのコメント投稿スクリプト
 # Bot名義またはユーザー名義でコメントを投稿
 #

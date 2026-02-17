@@ -57,7 +57,7 @@ cli_build_launch_command() {
 
     case "$CLI_PROVIDER" in
         claude)
-            cmd+="CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude --model '${CLI_MODEL}' --dangerously-skip-permissions --teammate-mode in-process"
+            cmd+="unset CLAUDECODE && claude --model '${CLI_MODEL}' --dangerously-skip-permissions"
             ;;
         opencode)
             # ロール別の opencode.json を参照（未指定時は leader）
@@ -144,8 +144,8 @@ cli_wait_tui_ready() {
     local max_wait marker
     case "$CLI_PROVIDER" in
         claude)
-            max_wait=5
-            marker=">"
+            max_wait=15
+            marker="bypass permissions"
             ;;
         opencode)
             max_wait=10
@@ -160,7 +160,7 @@ cli_wait_tui_ready() {
             return 0
         fi
         sleep 1
-        ((i++))
+        i=$((i + 1))
     done
 }
 

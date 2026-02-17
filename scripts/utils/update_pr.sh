@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/opt/homebrew/bin/bash
 # PRの修正スクリプト
 # リベース、追加コミット、force push対応
 #

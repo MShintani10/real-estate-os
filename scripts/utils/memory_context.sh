@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/opt/homebrew/bin/bash
 # Memory Context 取得ツール
 # チームメモリを3層フィルタリングで取得し、YAML block scalar形式で出力する。
 # task_assignment の team_memory_context フィールドに埋め込み可能。

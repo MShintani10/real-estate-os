@@ -482,7 +482,7 @@ EOF
             _create_agent_pane "$pane_num" "${name} (${role^})"
             _wait_for_slot
             _start_job "Sub-Leader ${name}" start_agent_in_pane "$role" "$name" "$pane_num" "$_gh_export"
-            ((pane_num++))
+            pane_num=$((pane_num + 1))
         done
 
         _wait_all_jobs

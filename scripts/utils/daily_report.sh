@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/opt/homebrew/bin/bash
 # 日次レポート Issue 管理スクリプト
 # 作業対象リポジトリごとに日次レポート Issue を自動作成・管理する
 #

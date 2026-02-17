@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/opt/homebrew/bin/bash
 # GitHub App Token 取得スクリプト
 # curl + JWT でInstallation Access Tokenを生成します
 #

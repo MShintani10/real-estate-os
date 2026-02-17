@@ -111,7 +111,7 @@ start_agent_in_pane() {
         fi
 
         print_warning "${name} 起動失敗、リトライ中..."
-        ((retry++))
+        retry=$((retry + 1))
         sleep "$(get_delay agent_retry_wait 2)"
     done
 
@@ -176,7 +176,7 @@ start_ignitian_in_pane() {
         fi
 
         print_warning "IGNITIAN-${id} 起動失敗、リトライ中..."
-        ((retry++))
+        retry=$((retry + 1))
         sleep "$(get_delay agent_retry_wait 2)"
     done
 

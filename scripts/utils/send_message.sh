@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/opt/homebrew/bin/bash
 # ユーティリティ: メッセージ送信（MIME形式）
 # ignite_mime.py build の薄いラッパー
 

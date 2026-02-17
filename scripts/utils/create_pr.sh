@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/opt/homebrew/bin/bash
 # PR作成ヘルパースクリプト
 # Issue番号からPRを作成します
 #

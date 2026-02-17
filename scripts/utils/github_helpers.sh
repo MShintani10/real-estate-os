@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/opt/homebrew/bin/bash
 # GitHub API 共通ヘルパー関数
 # Bot Token取得（キャッシュ + リトライ機構）、GitHub API ヘルパーを提供
 #

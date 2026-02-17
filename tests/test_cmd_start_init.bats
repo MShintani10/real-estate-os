@@ -110,6 +110,10 @@ teardown() {
 }
 
 @test "dry-run: 通常(PTY) はカラー出力が含まれる" {
+    # CI 環境では PTY が正常に動作しない場合があるためスキップ
+    if [[ -n "${CI:-}" ]]; then
+        skip "CI 環境では PTY テストをスキップ"
+    fi
     local cmd
     cmd="$PROJECT_ROOT/scripts/ignite start --dry-run --skip-validation -n -w $TEST_WORKSPACE"
     run run_with_pty "$cmd"
@@ -124,6 +128,10 @@ teardown() {
 }
 
 @test "dry-run: NO_COLOR ではカラー出力が含まれない" {
+    # CI 環境では PTY が正常に動作しない場合があるためスキップ
+    if [[ -n "${CI:-}" ]]; then
+        skip "CI 環境では PTY テストをスキップ"
+    fi
     local cmd
     cmd="NO_COLOR=1 $PROJECT_ROOT/scripts/ignite start --dry-run --skip-validation -n -w $TEST_WORKSPACE"
     run run_with_pty "$cmd"

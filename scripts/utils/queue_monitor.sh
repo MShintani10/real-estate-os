@@ -81,22 +81,17 @@ mime_update_status() {
 
 # Bot Token キャッシュのプリウォーム（有効期限前に更新）
 _refresh_bot_token_cache() {
+    local _lock_file="$IGNITE_RUNTIME_DIR/state/.bg_lock_refresh_bot_token_cache"
+    exec {_lock_fd}>"$_lock_file"
+    flock -n "$_lock_fd" || return 0
+    trap "exec {_lock_fd}>&-" RETURN
+
     local config_dir="$IGNITE_CONFIG_DIR"
     local watcher_config="$config_dir/github-watcher.yaml"
     [[ -f "$watcher_config" ]] || return 0
 
-    # NOTE: 同一の sed パターンが agent.sh _resolve_bot_token にも存在する
     local repo
-    repo=$(sed -n '/repositories:/,/^[^ ]/{
-        /- repo:/{
-            s/.*- repo: *//
-            s/ *#.*//
-            s/["\x27]//g
-            s/ *$//
-            p; q
-        }
-    }' "$watcher_config" 2>/dev/null)
-    [[ -z "$repo" ]] && return 0
+    repo=$(yaml_get_first_repo "$watcher_config") || return 0
 
     (
         SCRIPT_DIR="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
@@ -789,6 +784,11 @@ _get_report_cache_dir() {
 }
 
 _trigger_daily_report() {
+    local _lock_file="$IGNITE_RUNTIME_DIR/state/.bg_lock_trigger_daily_report"
+    exec {_lock_fd}>"$_lock_file"
+    flock -n "$_lock_fd" || return 0
+    trap "exec {_lock_fd}>&-" RETURN
+
     local repo="$1"
     local issue_num="${2:-}"
     local trigger="${3:-}"
@@ -893,6 +893,11 @@ _persist_progress_update() {
 }
 
 _report_progress() {
+    local _lock_file="$IGNITE_RUNTIME_DIR/state/.bg_lock_report_progress"
+    exec {_lock_fd}>"$_lock_file"
+    flock -n "$_lock_fd" || return 0
+    trap "exec {_lock_fd}>&-" RETURN
+
     local file="$1"
 
     local daily_report_script="${SCRIPT_DIR}/daily_report.sh"
@@ -963,6 +968,11 @@ _report_progress() {
 }
 
 _report_evaluation() {
+    local _lock_file="$IGNITE_RUNTIME_DIR/state/.bg_lock_report_evaluation"
+    exec {_lock_fd}>"$_lock_file"
+    flock -n "$_lock_fd" || return 0
+    trap "exec {_lock_fd}>&-" RETURN
+
     local file="$1"
 
     local daily_report_script="${SCRIPT_DIR}/daily_report.sh"
@@ -1100,6 +1110,11 @@ EOF
 }
 
 _sync_dashboard_to_reports() {
+    local _lock_file="$IGNITE_RUNTIME_DIR/state/.bg_lock_sync_dashboard_to_reports"
+    exec {_lock_fd}>"$_lock_file"
+    flock -n "$_lock_fd" || return 0
+    trap "exec {_lock_fd}>&-" RETURN
+
     local dashboard="$IGNITE_RUNTIME_DIR/dashboard.md"
     [[ -f "$dashboard" ]] || return 0
 

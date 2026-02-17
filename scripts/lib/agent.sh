@@ -15,18 +15,8 @@ _resolve_bot_token() {
     [[ -f "$watcher_config" ]] || return 1
 
     # github-watcher.yaml から最初のリポジトリ名を取得
-    # NOTE: 同一の sed パターンが queue_monitor.sh _refresh_bot_token_cache にも存在する
     local repo
-    repo=$(sed -n '/repositories:/,/^[^ ]/{
-        /- repo:/{
-            s/.*- repo: *//
-            s/ *#.*//
-            s/["\x27]//g
-            s/ *$//
-            p; q
-        }
-    }' "$watcher_config" 2>/dev/null)
-    [[ -z "$repo" ]] && return 1
+    repo=$(yaml_get_first_repo "$watcher_config") || return 1
 
     # サブシェルで github_helpers.sh を source してキャッシュ付きトークン取得
     local token

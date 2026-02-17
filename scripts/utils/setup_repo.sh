@@ -7,6 +7,7 @@
 #   ./scripts/utils/setup_repo.sh branch <repo_path> <issue_number> [base_branch]
 #   ./scripts/utils/setup_repo.sh path <owner/repo>
 #   ./scripts/utils/setup_repo.sh default-branch <owner/repo>
+#   ./scripts/utils/setup_repo.sh bootstrap-app <target_dir> [--force]
 
 set -e
 set -u
@@ -35,6 +36,7 @@ show_help() {
   ./scripts/utils/setup_repo.sh path <owner/repo>
   ./scripts/utils/setup_repo.sh default-branch <owner/repo>
   ./scripts/utils/setup_repo.sh base-branch <owner/repo>
+  ./scripts/utils/setup_repo.sh bootstrap-app <target_dir> [--force]
 
 コマンド:
   clone <owner/repo> [base_branch]
@@ -55,6 +57,10 @@ show_help() {
       設定ファイルからベースブランチを取得します。
       設定がない場合はリポジトリのデフォルトブランチを使用。
 
+  bootstrap-app <target_dir> [--force]
+      React + API + PostgreSQL + CI 構成の基盤リポジトリを生成します。
+      --force を指定すると既存ファイルを上書きします。
+
 環境変数:
   WORKSPACE_DIR    ワークスペースディレクトリ（デフォルト: workspace）
 
@@ -71,6 +77,9 @@ show_help() {
 
   # Issue用ブランチ作成
   ./scripts/utils/setup_repo.sh branch "$REPO_PATH" 123
+
+  # 公開アプリ基盤を作成
+  ./scripts/utils/setup_repo.sh bootstrap-app /tmp/my-app
 
   # 作業
   cd "$REPO_PATH"
@@ -280,6 +289,395 @@ get_repo_path() {
     repo_to_path "$repo"
 }
 
+# ファイル書き込み（必要に応じて上書き）
+write_template_file() {
+    local file_path="$1"
+    local force_overwrite="$2"
+
+    if [[ "$force_overwrite" != "true" ]] && [[ -f "$file_path" ]]; then
+        log_warn "既存ファイルをスキップ: $file_path"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$file_path")"
+    cat > "$file_path"
+}
+
+# 公開可能なアプリ基盤を生成
+bootstrap_app_repo() {
+    local target_dir="${1:-}"
+    shift || true
+
+    local force_overwrite="false"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --force|-f)
+                force_overwrite="true"
+                ;;
+            *)
+                log_error "Unknown option for bootstrap-app: $1"
+                return 1
+                ;;
+        esac
+        shift
+    done
+
+    if [[ -z "$target_dir" ]]; then
+        log_error "bootstrap-app には <target_dir> が必要です"
+        return 1
+    fi
+
+    mkdir -p "$target_dir"
+    if [[ "$force_overwrite" != "true" ]] && find "$target_dir" -mindepth 1 -print -quit | grep -q .; then
+        log_error "target_dir が空ではありません: $target_dir"
+        log_info "--force を付けると上書きできます"
+        return 1
+    fi
+
+    mkdir -p \
+        "$target_dir/apps/web/src" \
+        "$target_dir/apps/api/src" \
+        "$target_dir/apps/api/tests" \
+        "$target_dir/db/init" \
+        "$target_dir/.github/workflows"
+
+    write_template_file "$target_dir/.gitignore" "$force_overwrite" <<'EOF'
+node_modules/
+dist/
+coverage/
+.env
+.env.local
+.DS_Store
+EOF
+
+    write_template_file "$target_dir/.env.example" "$force_overwrite" <<'EOF'
+POSTGRES_USER=app
+POSTGRES_PASSWORD=app
+POSTGRES_DB=app
+DATABASE_URL=postgres://app:app@db:5432/app
+VITE_API_BASE_URL=http://localhost:3001
+EOF
+
+    write_template_file "$target_dir/package.json" "$force_overwrite" <<'EOF'
+{
+  "name": "ignite-app-foundation",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w apps/api && npm run build -w apps/web",
+    "test": "npm run test -w apps/api && npm run test -w apps/web",
+    "lint": "npm run lint -w apps/api && npm run lint -w apps/web"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
+EOF
+
+    write_template_file "$target_dir/docker-compose.yml" "$force_overwrite" <<'EOF'
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://app:app@db:5432/app}
+      PORT: 3001
+      NODE_ENV: development
+    ports:
+      - "3001:3001"
+    depends_on:
+      - db
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3001}
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+EOF
+
+    write_template_file "$target_dir/README.md" "$force_overwrite" <<'EOF'
+# App Foundation (React + API + PostgreSQL)
+
+IGNITEで並列実装を回しやすい、公開前提の土台リポジトリです。
+
+## Stack
+- Frontend: React + Vite
+- Backend: Node.js (Express)
+- DB: PostgreSQL 16
+- CI: GitHub Actions + `shadowci.yml` テンプレート
+
+## Quick Start
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+- Web: http://localhost:5173
+- API: http://localhost:3001/healthz
+- PostgreSQL: localhost:5432
+
+## AI Agent Parallel Plan (Example)
+1. Strategist: 要件分解と優先順位付け
+2. Architect: API契約とDB設計
+3. Coordinator: 実装タスクを複数ワーカーに配布
+4. Evaluator: テスト・品質評価
+5. Innovator: UX改善・差別化案
+EOF
+
+    write_template_file "$target_dir/shadowci.yml" "$force_overwrite" <<'EOF'
+version: 1
+pipeline:
+  - name: install
+    run: npm install
+  - name: lint
+    run: npm run lint
+  - name: test
+    run: npm run test
+  - name: build
+    run: npm run build
+EOF
+
+    write_template_file "$target_dir/.github/workflows/ci.yml" "$force_overwrite" <<'EOF'
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm install
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build
+EOF
+
+    write_template_file "$target_dir/apps/api/package.json" "$force_overwrite" <<'EOF'
+{
+  "name": "@app/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "build": "echo \"api build: no-op\"",
+    "lint": "node -e \"console.log('api lint: no-op')\"",
+    "test": "node --test tests/health.test.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "pg": "^8.12.0"
+  }
+}
+EOF
+
+    write_template_file "$target_dir/apps/api/src/index.js" "$force_overwrite" <<'EOF'
+import cors from "cors";
+import dotenv from "dotenv";
+import express from "express";
+import pg from "pg";
+
+dotenv.config();
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const port = process.env.PORT || 3001;
+const databaseUrl = process.env.DATABASE_URL || "";
+
+app.get("/healthz", async (_req, res) => {
+    if (!databaseUrl) {
+        return res.status(200).json({ status: "ok", db: "skipped" });
+    }
+
+    const client = new pg.Client({ connectionString: databaseUrl });
+    try {
+        await client.connect();
+        await client.query("SELECT 1");
+        return res.status(200).json({ status: "ok", db: "ok" });
+    } catch (_error) {
+        return res.status(503).json({ status: "degraded", db: "error" });
+    } finally {
+        await client.end().catch(() => {});
+    }
+});
+
+app.get("/api/version", (_req, res) => {
+    res.json({ name: "@app/api", version: "0.1.0" });
+});
+
+app.listen(port, () => {
+    console.log(`api listening on ${port}`);
+});
+EOF
+
+    write_template_file "$target_dir/apps/api/tests/health.test.js" "$force_overwrite" <<'EOF'
+import test from "node:test";
+import assert from "node:assert/strict";
+
+test("placeholder", () => {
+    assert.equal(1 + 1, 2);
+});
+EOF
+
+    write_template_file "$target_dir/apps/api/Dockerfile" "$force_overwrite" <<'EOF'
+FROM node:20-alpine
+WORKDIR /app
+
+COPY package*.json ./
+COPY apps/api/package*.json apps/api/
+RUN npm install
+
+COPY apps/api apps/api
+WORKDIR /app/apps/api
+EXPOSE 3001
+
+CMD ["npm", "run", "start"]
+EOF
+
+    write_template_file "$target_dir/apps/web/package.json" "$force_overwrite" <<'EOF'
+{
+  "name": "@app/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "node -e \"console.log('web lint: no-op')\"",
+    "test": "node -e \"console.log('web test: no-op')\""
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
+EOF
+
+    write_template_file "$target_dir/apps/web/index.html" "$force_overwrite" <<'EOF'
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>App Foundation</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+EOF
+
+    write_template_file "$target_dir/apps/web/src/main.jsx" "$force_overwrite" <<'EOF'
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { App } from "./App";
+
+createRoot(document.getElementById("root")).render(
+    <React.StrictMode>
+        <App />
+    </React.StrictMode>
+);
+EOF
+
+    write_template_file "$target_dir/apps/web/src/App.jsx" "$force_overwrite" <<'EOF'
+import { useEffect, useState } from "react";
+
+export function App() {
+    const [health, setHealth] = useState("loading");
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
+
+    useEffect(() => {
+        fetch(`${apiBaseUrl}/healthz`)
+            .then((res) => res.json())
+            .then((json) => setHealth(json.status || "unknown"))
+            .catch(() => setHealth("error"));
+    }, [apiBaseUrl]);
+
+    return (
+        <main style={{ fontFamily: "sans-serif", padding: "24px" }}>
+            <h1>App Foundation</h1>
+            <p>React + API + PostgreSQL</p>
+            <p>API health: {health}</p>
+        </main>
+    );
+}
+EOF
+
+    write_template_file "$target_dir/apps/web/Dockerfile" "$force_overwrite" <<'EOF'
+FROM node:20-alpine AS build
+WORKDIR /app
+
+COPY package*.json ./
+COPY apps/web/package*.json apps/web/
+RUN npm install
+
+COPY apps/web apps/web
+WORKDIR /app/apps/web
+RUN npm run build
+
+FROM nginx:1.27-alpine
+COPY --from=build /app/apps/web/dist /usr/share/nginx/html
+EXPOSE 80
+EOF
+
+    write_template_file "$target_dir/db/init/001_init.sql" "$force_overwrite" <<'EOF'
+CREATE TABLE IF NOT EXISTS app_users (
+    id BIGSERIAL PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+EOF
+
+    if [[ ! -d "$target_dir/.git" ]]; then
+        git init "$target_dir" >/dev/null 2>&1 || true
+    fi
+
+    log_success "アプリ基盤の生成完了: $target_dir"
+    echo "$target_dir"
+}
+
 # =============================================================================
 # メイン
 # =============================================================================
@@ -303,6 +701,9 @@ main() {
             ;;
         base-branch)
             get_base_branch "$@"
+            ;;
+        bootstrap-app)
+            bootstrap_app_repo "$@"
             ;;
         -h|--help|help)
             show_help

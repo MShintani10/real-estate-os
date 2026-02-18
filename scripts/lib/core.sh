@@ -2,7 +2,7 @@
 # lib/core.sh - 定数・カラー定義・出力ヘルパー
 [[ -n "${__LIB_CORE_LOADED:-}" ]] && return; __LIB_CORE_LOADED=1
 
-VERSION="0.5.1"
+VERSION="0.6.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
@@ -52,10 +52,6 @@ unset _CHARACTERS_FILE
 # デフォルト設定
 DEFAULT_MODEL="openai/gpt-5.2-codex"
 DEFAULT_WORKER_COUNT=3
-
-# Claude セッションデータのパス（PROJECT_ROOT から動的に生成）
-# Claude Code は /path/to/project を -path-to-project に変換してディレクトリ名にする
-CLAUDE_PROJECTS_DIR="$HOME/.claude/projects/$(echo "$PROJECT_ROOT" | sed 's|/|-|g')"
 
 # カラー定義（TTY検出 + NO_COLOR対応）
 if [[ -n "${NO_COLOR:-}" ]] || ! [[ -t 1 ]] || [[ "${TERM:-}" == "dumb" ]]; then
@@ -212,7 +208,6 @@ resolve_config() {
 }
 
 # system.yaml から読み込むグローバル設定
-TMUX_WINDOW_NAME=$(get_config tmux window_name "ignite")
 DEFAULT_MESSAGE_PRIORITY=$(get_config defaults message_priority "normal")
 
 # CLI Provider 抽象化レイヤー
